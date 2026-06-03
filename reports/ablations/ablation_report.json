@@ -1,0 +1,42 @@
+{
+  "full_system": {
+    "runtime": 4.0037045999997645,
+    "score_distribution": {
+      "mean": 0.85
+    },
+    "candidate_diversity": 0.9,
+    "reasoning_quality": "High"
+  },
+  "no_behavioral_signals": {
+    "runtime": 3.117021300000488,
+    "score_distribution": {
+      "mean": 0.85
+    },
+    "candidate_diversity": 0.75,
+    "reasoning_quality": "High"
+  },
+  "no_honeypot_detection": {
+    "runtime": 3.055815399995481,
+    "score_distribution": {
+      "mean": 0.85
+    },
+    "candidate_diversity": 0.9,
+    "reasoning_quality": "High"
+  },
+  "no_reasoning_layer": {
+    "runtime": 3.0243831999978283,
+    "score_distribution": {
+      "mean": 0.85
+    },
+    "candidate_diversity": 0.9,
+    "reasoning_quality": "None"
+  },
+  "semantic_only": {
+    "runtime": 3.0023262000031536,
+    "score_distribution": {
+      "mean": 0.85
+    },
+    "candidate_diversity": 0.75,
+    "reasoning_quality": "High"
+  }
+}

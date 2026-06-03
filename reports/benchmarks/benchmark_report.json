@@ -1,0 +1,22 @@
+{
+  "1000": {
+    "runtime": 9.07,
+    "memory": 12.38,
+    "throughput": 110.25
+  },
+  "10000": {
+    "runtime": 111.41,
+    "memory": 429.37,
+    "throughput": 89.76
+  },
+  "50000": {
+    "runtime": 450.75,
+    "memory": 1286.73,
+    "throughput": 110.93
+  },
+  "100000": {
+    "runtime": 932.99,
+    "memory": 1801.88,
+    "throughput": 107.18
+  }
+}

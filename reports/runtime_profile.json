@@ -1,0 +1,10 @@
+{
+  "jd_parsing_time": 0.01568369999586139,
+  "candidate_parsing_time": 12.670315800001845,
+  "feature_extraction_time": 254.58523900134605,
+  "matching_time": 0.0,
+  "ranking_time": 353.16508890000114,
+  "reasoning_time": 0.021524299998418428,
+  "submission_time": 0.000563700006750878,
+  "total_runtime": 365.87600839999504
+}
