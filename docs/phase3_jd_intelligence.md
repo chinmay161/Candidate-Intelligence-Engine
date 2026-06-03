@@ -74,6 +74,12 @@ The weight generator maps these parsed requirements to the existing candidate fe
     "logistics": {},
     "anomaly": {}
   },
+  "weight_explanations": {
+    "retrieval_skill_depth": {
+      "weight": 0.034,
+      "reason": "Required skill: retrieval systems"
+    }
+  },
   "confidence": 0.0
 }
 ```
@@ -88,6 +94,8 @@ Weights are generated from parsed JD content:
 - Location aliases boost location, relocation, India, and work-mode features.
 - Behavioral preferences boost ownership, startup exposure, product impact, experimentation, and hands-on features.
 - Negative signals boost the corresponding penalty or anomaly features.
+- `WeightProfile.normalize()` rescales the full grouped profile so positive weights sum to one, keeping ranking stable when one JD mentions many more requirements than another.
+- `weight_explanations` stores a flat feature-keyed debugging map with each normalized weight and the reason it was boosted.
 
 The generator emits every candidate feature group so later rankers can consume a stable shape even when a JD is sparse.
 

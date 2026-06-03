@@ -125,18 +125,77 @@ class WeightProfile:
     """Candidate-feature weights grouped by feature group."""
 
     by_group: dict[str, dict[str, float]] = field(default_factory=dict)
+    reasons: dict[str, str] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, dict[str, float]]:
         return {group: dict(weights) for group, weights in self.by_group.items()}
 
+    def to_explanation_dict(self) -> dict[str, dict[str, Any]]:
+        """Return a flat, feature-keyed explanation map for debugging."""
+
+        return self.explanations
+
+    @property
+    def explanations(self) -> dict[str, dict[str, Any]]:
+        """Flat feature explanations with the active normalized weight."""
+
+        return {
+            feature_name: {
+                "weight": weight,
+                "reason": self.reasons.get(feature_name, "Baseline feature prior"),
+            }
+            for weights in self.by_group.values()
+            for feature_name, weight in weights.items()
+        }
+
+    def normalize(self) -> "WeightProfile":
+        """Return a profile whose positive weights sum to one across all groups."""
+
+        total = sum(max(float(weight), 0.0) for weights in self.by_group.values() for weight in weights.values())
+        if total <= 0:
+            normalized = {
+                group: {feature_name: 0.0 for feature_name in weights}
+                for group, weights in self.by_group.items()
+            }
+        else:
+            normalized = {
+                group: {
+                    feature_name: round(max(float(weight), 0.0) / total, 4)
+                    for feature_name, weight in weights.items()
+                }
+                for group, weights in self.by_group.items()
+            }
+        return WeightProfile(by_group=normalized, reasons=dict(self.reasons))
+
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "WeightProfile":
+        grouped: dict[str, dict[str, float]] = {}
+        reasons: dict[str, str] = {}
+
+        if isinstance(data.get("by_group"), dict):
+            nested_data = data.get("by_group", {})
+            raw_reasons = data.get("reasons", {})
+            if isinstance(raw_reasons, dict):
+                reasons.update({str(name): str(reason) for name, reason in raw_reasons.items()})
+        else:
+            nested_data = data
+
+        for group, weights in nested_data.items():
+            if not isinstance(weights, dict):
+                continue
+            grouped[str(group)] = {}
+            for name, value in weights.items():
+                feature_name = str(name)
+                if isinstance(value, dict):
+                    grouped[str(group)][feature_name] = float(value.get("weight", 0.0))
+                    if "reason" in value:
+                        reasons[feature_name] = str(value["reason"])
+                else:
+                    grouped[str(group)][feature_name] = float(value)
+
         return cls(
-            by_group={
-                str(group): {str(name): float(weight) for name, weight in weights.items()}
-                for group, weights in data.items()
-                if isinstance(weights, dict)
-            }
+            by_group=grouped,
+            reasons=reasons,
         )
 
 
@@ -200,6 +259,7 @@ class JDAnalysis:
             "locations": list(self.locations),
             "behavioral_preferences": list(self.behavioral_preferences),
             "feature_weights": self.feature_weights.to_dict(),
+            "weight_explanations": self.feature_weights.to_explanation_dict(),
             "confidence": self.confidence,
             "job_description": self.job_description.to_dict(),
             "role_classification": self.role_classification.to_dict(),
@@ -232,7 +292,19 @@ class JDAnalysis:
             role_classification=RoleClassification.from_dict(role_data),
             requirements=JobRequirement.from_dict(requirements_data),
             negative_signals=tuple(str(item) for item in data.get("negative_signals", ())),
-            feature_weights=WeightProfile.from_dict(data.get("feature_weights", {})),
+            feature_weights=_weight_profile_from_analysis_data(data),
             confidence=float(data.get("confidence", 0.0)),
         )
 
+
+def _weight_profile_from_analysis_data(data: dict[str, Any]) -> WeightProfile:
+    profile = WeightProfile.from_dict(data.get("feature_weights", {}))
+    raw_explanations = data.get("weight_explanations", {})
+    if not isinstance(raw_explanations, dict):
+        return profile
+
+    reasons = dict(profile.reasons)
+    for feature_name, explanation in raw_explanations.items():
+        if isinstance(explanation, dict) and "reason" in explanation:
+            reasons[str(feature_name)] = str(explanation["reason"])
+    return WeightProfile(by_group=profile.by_group, reasons=reasons)

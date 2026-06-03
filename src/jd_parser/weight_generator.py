@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-from collections import defaultdict
-
 from candidate_processor.feature_registry import DEFAULT_FEATURE_REGISTRY, FEATURE_GROUPS, FeatureRegistry
 from candidate_processor.normalizer import clamp
-from jd_parser.jd_models import JDAnalysis, JobRequirement, RoleClassification, WeightProfile
+from jd_parser.jd_models import JDAnalysis, JobRequirement, JobSkill, RoleClassification, WeightProfile
 
 
 class WeightGenerator:
@@ -70,6 +68,28 @@ class WeightGenerator:
         "framework_demo_only": ("framework_demo_penalty_text",),
         "job_hopper": ("job_hop_title_chaser_penalty", "average_tenure_score"),
     }
+    SKILL_REASON_LABELS: dict[str, str] = {
+        "backend_api": "backend APIs",
+        "computer_vision": "computer vision",
+        "containerization": "containerization",
+        "data_pipeline": "data pipelines",
+        "deep_learning": "deep learning",
+        "embeddings": "embeddings",
+        "hybrid_search": "hybrid search",
+        "llm": "LLM systems",
+        "machine_learning": "machine learning",
+        "mlops": "MLOps",
+        "python": "Python",
+        "rag": "retrieval systems",
+        "ranking": "ranking systems",
+        "ranking_evaluation": "ranking evaluation",
+        "search": "search systems",
+        "semantic_search": "semantic search",
+        "sparse_retrieval": "sparse retrieval",
+        "sql": "SQL",
+        "transformers": "transformers",
+        "vector_database": "vector databases",
+    }
 
     def __init__(self, registry: FeatureRegistry = DEFAULT_FEATURE_REGISTRY) -> None:
         self.registry = registry
@@ -79,11 +99,13 @@ class WeightGenerator:
         """Generate grouped weights for all candidate feature groups."""
 
         grouped = self._empty_grouped_weights()
-        self._apply_role(grouped, analysis.role_classification)
-        self._apply_requirements(grouped, analysis.requirements)
-        self._apply_negative_signals(grouped, analysis.negative_signals)
-        self._normalize_grouped(grouped)
-        return WeightProfile(by_group={group: dict(weights) for group, weights in grouped.items()})
+        reasons: dict[str, str] = {}
+        self._apply_role(grouped, reasons, analysis.role_classification)
+        self._apply_requirements(grouped, reasons, analysis.requirements)
+        self._apply_negative_signals(grouped, reasons, analysis.negative_signals)
+        self._clamp_grouped(grouped)
+        profile = WeightProfile(by_group={group: dict(weights) for group, weights in grouped.items()}, reasons=reasons)
+        return profile.normalize()
 
     def _empty_grouped_weights(self) -> dict[str, dict[str, float]]:
         grouped: dict[str, dict[str, float]] = {group: {} for group in FEATURE_GROUPS}
@@ -91,63 +113,85 @@ class WeightGenerator:
             grouped[definition.group][definition.name] = 0.05
         return grouped
 
-    def _apply_role(self, grouped: dict[str, dict[str, float]], role: RoleClassification) -> None:
+    def _apply_role(self, grouped: dict[str, dict[str, float]], reasons: dict[str, str], role: RoleClassification) -> None:
         role_strength = max(role.confidence, 0.35)
         for feature_name in self.ROLE_FEATURES.get(role.role_family, ()):
-            self._add(grouped, feature_name, 0.65 * role_strength)
+            self._add(grouped, reasons, feature_name, 0.65 * role_strength, f"Role family: {role.role_family}")
 
-    def _apply_requirements(self, grouped: dict[str, dict[str, float]], requirements: JobRequirement) -> None:
+    def _apply_requirements(self, grouped: dict[str, dict[str, float]], reasons: dict[str, str], requirements: JobRequirement) -> None:
         for skill in requirements.required_skills:
             for feature_name in self.SKILL_TO_FEATURES.get(skill.canonical_name, ()):
-                self._add(grouped, feature_name, 1.15)
-            self._add(grouped, "skill_history_support_ratio", 0.55)
+                self._add(grouped, reasons, feature_name, 1.15, self._skill_reason("Required", skill))
+            self._add(grouped, reasons, "skill_history_support_ratio", 0.55, "Required skills need career-history support")
         for skill in requirements.preferred_skills:
             for feature_name in self.SKILL_TO_FEATURES.get(skill.canonical_name, ()):
-                self._add(grouped, feature_name, 0.55)
+                self._add(grouped, reasons, feature_name, 0.55, self._skill_reason("Preferred", skill))
         for skill in requirements.optional_skills:
             for feature_name in self.SKILL_TO_FEATURES.get(skill.canonical_name, ()):
-                self._add(grouped, feature_name, 0.25)
+                self._add(grouped, reasons, feature_name, 0.25, self._skill_reason("Optional", skill))
 
         if requirements.experience_min:
-            self._add(grouped, "yoe_target_band_score", 0.8)
-            self._add(grouped, "career_duration_consistency", 0.35)
+            experience_reason = f"Experience requirement: {requirements.experience_min}-{requirements.experience_max} years"
+            self._add(grouped, reasons, "yoe_target_band_score", 0.8, experience_reason)
+            self._add(grouped, reasons, "career_duration_consistency", 0.35, experience_reason)
             if requirements.experience_min >= 5:
-                self._add(grouped, "senior_judgment_experience_score", 0.5)
+                self._add(grouped, reasons, "senior_judgment_experience_score", 0.5, "Senior experience requirement")
 
         for industry in requirements.industries:
             for feature_name in self.INDUSTRY_FEATURES.get(industry, ()):
-                self._add(grouped, feature_name, 0.6)
+                self._add(grouped, reasons, feature_name, 0.6, f"Industry context: {industry}")
         for location in requirements.locations:
             if location in {"pune", "noida", "bangalore", "hyderabad", "delhi_ncr", "mumbai"}:
-                self._add(grouped, "preferred_location_score", 0.65)
-                self._add(grouped, "relocation_fit_score", 0.45)
+                self._add(grouped, reasons, "preferred_location_score", 0.65, f"Location requirement: {location}")
+                self._add(grouped, reasons, "relocation_fit_score", 0.45, f"Location requirement: {location}")
             if location == "india":
-                self._add(grouped, "india_location_score", 0.55)
+                self._add(grouped, reasons, "india_location_score", 0.55, "Location requirement: India")
             if location in {"remote", "hybrid", "onsite"}:
-                self._add(grouped, "work_mode_fit_score", 0.45)
+                self._add(grouped, reasons, "work_mode_fit_score", 0.45, f"Work mode requirement: {location}")
 
         for trait in requirements.behavioral_preferences:
             for feature_name in self.BEHAVIOR_FEATURES.get(trait, ()):
-                self._add(grouped, feature_name, 0.45)
+                self._add(grouped, reasons, feature_name, 0.45, f"Behavioral preference: {trait}")
 
-        self._add(grouped, "honeypot_score", 0.7)
-        self._add(grouped, "title_description_mismatch", 0.45)
-        self._add(grouped, "availability_multiplier", 0.35)
-        self._add(grouped, "contactability_multiplier", 0.25)
+        self._add(grouped, reasons, "honeypot_score", 0.7, "Baseline suspicious-profile guardrail")
+        self._add(grouped, reasons, "title_description_mismatch", 0.45, "Baseline role-consistency guardrail")
+        self._add(grouped, reasons, "availability_multiplier", 0.35, "Baseline hireability signal")
+        self._add(grouped, reasons, "contactability_multiplier", 0.25, "Baseline contactability signal")
 
-    def _apply_negative_signals(self, grouped: dict[str, dict[str, float]], negative_signals: tuple[str, ...]) -> None:
+    def _apply_negative_signals(self, grouped: dict[str, dict[str, float]], reasons: dict[str, str], negative_signals: tuple[str, ...]) -> None:
         for signal in negative_signals:
             for feature_name in self.NEGATIVE_FEATURES.get(signal, ()):
-                self._add(grouped, feature_name, 0.75)
-            self._add(grouped, "honeypot_score", 0.35)
+                self._add(grouped, reasons, feature_name, 0.75, f"Negative signal: {signal}")
+            self._add(grouped, reasons, "honeypot_score", 0.35, f"Negative signal: {signal}")
 
-    def _add(self, grouped: dict[str, dict[str, float]], feature_name: str, value: float) -> None:
+    def _add(
+        self,
+        grouped: dict[str, dict[str, float]],
+        reasons: dict[str, str],
+        feature_name: str,
+        value: float,
+        reason: str,
+    ) -> None:
         group = self._feature_group.get(feature_name)
         if group is None:
             return
         grouped[group][feature_name] = grouped[group].get(feature_name, 0.05) + value
+        self._add_reason(reasons, feature_name, reason)
 
-    def _normalize_grouped(self, grouped: dict[str, dict[str, float]]) -> None:
+    def _clamp_grouped(self, grouped: dict[str, dict[str, float]]) -> None:
         for weights in grouped.values():
             for feature_name, weight in list(weights.items()):
                 weights[feature_name] = round(clamp(weight), 4)
+
+    def _skill_reason(self, importance: str, skill: JobSkill) -> str:
+        label = self.SKILL_REASON_LABELS.get(skill.canonical_name, skill.canonical_name.replace("_", " "))
+        return f"{importance} skill: {label}"
+
+    def _add_reason(self, reasons: dict[str, str], feature_name: str, reason: str) -> None:
+        existing = reasons.get(feature_name)
+        if existing is None:
+            reasons[feature_name] = reason
+            return
+        existing_parts = existing.split("; ")
+        if reason not in existing_parts:
+            reasons[feature_name] = f"{existing}; {reason}"

@@ -27,6 +27,10 @@ class JDFeatureStoreTests(unittest.TestCase):
             loaded.feature_weights.by_group["skill"]["vector_db_skill_coverage"],
             analysis.feature_weights.by_group["skill"]["vector_db_skill_coverage"],
         )
+        self.assertEqual(
+            loaded.feature_weights.explanations["vector_db_skill_coverage"]["reason"],
+            analysis.feature_weights.explanations["vector_db_skill_coverage"]["reason"],
+        )
 
     def test_yaml_round_trip(self) -> None:
         analysis = JDParser().parse("Required: Python and MLflow. Remote role.", title="MLOps Engineer")
@@ -39,8 +43,8 @@ class JDFeatureStoreTests(unittest.TestCase):
 
         self.assertEqual(loaded.role_family, analysis.role_family)
         self.assertIn("remote", loaded.locations)
+        self.assertIn("weight_explanations", loaded.to_dict())
 
 
 if __name__ == "__main__":
     unittest.main()
-
