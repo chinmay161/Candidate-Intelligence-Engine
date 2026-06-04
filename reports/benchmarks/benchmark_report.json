@@ -1,22 +1,22 @@
 {
   "1000": {
-    "runtime": 9.07,
-    "memory": 12.38,
-    "throughput": 110.25
+    "runtime": 8.3,
+    "memory": 12.48,
+    "throughput": 120.42
   },
   "10000": {
-    "runtime": 111.41,
-    "memory": 429.37,
-    "throughput": 89.76
+    "runtime": 89.74,
+    "memory": 403.31,
+    "throughput": 111.43
   },
   "50000": {
-    "runtime": 450.75,
-    "memory": 1286.73,
-    "throughput": 110.93
+    "runtime": 405.47,
+    "memory": 1412.74,
+    "throughput": 123.31
   },
   "100000": {
-    "runtime": 932.99,
-    "memory": 1801.88,
-    "throughput": 107.18
+    "runtime": 851.66,
+    "memory": 1912.88,
+    "throughput": 117.42
   }
 }

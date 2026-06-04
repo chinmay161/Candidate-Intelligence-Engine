@@ -143,6 +143,8 @@ def ablation_pipeline(ablation_config: AblationConfig, jd_path: str, candidates_
     }
 
 def create_scaled_candidates(source_path: str, scale: int, dest_path: str):
+    if scale >= 100000:
+        return
     with open(source_path, "r", encoding="utf-8") as f_in, open(dest_path, "w", encoding="utf-8") as f_out:
         for i, line in enumerate(f_in):
             if i >= scale:
@@ -186,12 +188,12 @@ def main():
     print("Running Diagnostics...")
     # Convert recommendations to dicts with score/penalties/confidence
     candidates_data = []
-    if recommendations:
-        for rec in recommendations:
+    if ranking_result and ranking_result.matches:
+        for match in ranking_result.matches:
             candidates_data.append({
-                "score": rec.score,
-                "penalties": getattr(rec, "penalties", []),
-                "confidence": getattr(rec, "confidence", 1.0)
+                "score": match.score,
+                "penalties": match.penalties,
+                "confidence": getattr(match, "confidence", 0.0),
             })
     diagnostics_runner = RankingDiagnostics()
     diagnostics = diagnostics_runner.analyze(candidates_data)
@@ -209,7 +211,11 @@ def main():
     
     def benchmark_pipeline(scale: int):
         dest_path = f"data/candidates_{scale}.jsonl"
-        create_scaled_candidates(candidates_path, scale, dest_path)
+        if scale >= 100000:
+            dest_path = candidates_path
+        else:
+            create_scaled_candidates(candidates_path, scale, dest_path)
+            
         cfg = PipelineConfig(
             top_k=100, enable_audit_log=False, enable_reports=False,
             output_dir=f"outputs/bench_{scale}", jd_path=jd_path, candidates_path=dest_path
@@ -223,8 +229,7 @@ def main():
         runtime = time.perf_counter() - start
         return {"runtime": runtime, "memory_mb": peak / 10**6}
 
-    # Running full 50k/100k benchmarks takes ~6+ mins total, we'll run 1k, 10k to demonstrate
-    # If the user wants 100k, we can run it, but it might timeout. Let's do 1k and 10k.
+
     benchmark_results = benchmark_runner.run(benchmark_pipeline)
     benchmark_runner.save_report(benchmark_results)
 

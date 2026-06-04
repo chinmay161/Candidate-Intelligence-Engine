@@ -19,7 +19,14 @@ class RankingDiagnostics:
             return {}
 
         scores = [c.get("score", 0.0) for c in ranked_candidates]
-        penalties = [1 for c in ranked_candidates if c.get("penalties") or c.get("penalty_applied")]
+        
+        # Only count true honeypots/anomalies (ignore routine low-severity penalties like inactivity)
+        penalties = []
+        for c in ranked_candidates:
+            c_penalties = c.get("penalties") or []
+            if any(getattr(p, "severity", "low") != "low" for p in c_penalties):
+                penalties.append(1)
+                
         confidences = [c.get("confidence", 0.0) for c in ranked_candidates if "confidence" in c]
 
         score_distribution = {

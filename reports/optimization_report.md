@@ -1,6 +1,6 @@
 # Optimization Recommendations
 
-**Largest Bottleneck**: ranking_time consumes 96.53% of total runtime.
+**Largest Bottleneck**: ranking_time consumes 95.54% of total runtime.
 
 ## Targeted Recommendations
 

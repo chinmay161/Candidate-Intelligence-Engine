@@ -26,10 +26,14 @@ class PreRankRetrieverTests(unittest.TestCase):
         analysis = retrieval_jd()
         strong = candidate_record("STRONG", fit=1.0)
         weak = candidate_record("WEAK", fit=0.1)
-        query = HybridRetriever()._query_terms(analysis)
+        hybrid = HybridRetriever()
+        query = hybrid._query_terms(analysis)
 
-        self.assertGreater(BM25Retriever().score_candidate(analysis, strong, query), BM25Retriever().score_candidate(analysis, weak, query))
-        self.assertGreater(TFIDFRetriever().score_candidate(analysis, strong, query), TFIDFRetriever().score_candidate(analysis, weak, query))
+        strong_counts = strong.retrieval_term_counts
+        weak_counts = weak.retrieval_term_counts
+
+        self.assertGreater(BM25Retriever().score_candidate(analysis, strong, query, strong_counts, strong.retrieval_doc_len), BM25Retriever().score_candidate(analysis, weak, query, weak_counts, weak.retrieval_doc_len))
+        self.assertGreater(TFIDFRetriever().score_candidate(analysis, strong, query, strong_counts, strong.retrieval_doc_len), TFIDFRetriever().score_candidate(analysis, weak, query, weak_counts, weak.retrieval_doc_len))
 
 
 if __name__ == "__main__":

@@ -9,6 +9,7 @@ from collections import Counter
 from datetime import date
 from statistics import median
 
+from candidate_processor.normalizer import TextNormalizer
 from candidate_processor.constants import (
     AS_OF_DATE,
     CODING_TERMS,
@@ -40,7 +41,7 @@ from candidate_processor.constants import (
     VECTOR_DB_TERMS,
 )
 from candidate_processor.models import Candidate, CandidateEvidence, CandidateFeatureRecord, CareerHistory, Education, Skill
-from candidate_processor.normalizer import TextNormalizer, clamp, log_scale, safe_mean, score_by_terms, weighted_flag
+from candidate_processor.normalizer import TextNormalizer, clamp, log_scale, safe_mean, score_by_terms, score_by_terms_normalized, weighted_flag
 
 logger = logging.getLogger(__name__)
 
@@ -125,6 +126,22 @@ class CandidateFeatureExtractor:
         anomaly = self._anomaly_features(context, skill, career, education, logistics, semantic)
         evidence = self.evidence_extractor.extract(candidate)
 
+        text_parts: list[str] = []
+        for snippets in evidence.by_feature.values():
+            text_parts.extend(snippets)
+        
+        for group in (semantic, experience, skill, behavioral, career, education, logistics):
+            for feature, value in group.items():
+                numeric = float(value)
+                if numeric > 0:
+                    repetitions = 2 if numeric >= 0.65 else 1
+                    text_parts.extend(feature.replace("_", " ") for _ in range(repetitions))
+                    
+        terms = TextNormalizer.tokenize(" ".join(text_parts))
+        from collections import Counter
+        retrieval_term_counts = dict(Counter(terms))
+        retrieval_doc_len = len(terms)
+
         return CandidateFeatureRecord(
             candidate_id=candidate.candidate_id,
             semantic_features=semantic,
@@ -136,6 +153,8 @@ class CandidateFeatureExtractor:
             logistics_features=logistics,
             anomaly_features=anomaly,
             evidence=evidence,
+            retrieval_term_counts=retrieval_term_counts,
+            retrieval_doc_len=retrieval_doc_len,
         )
 
     def extract_many(self, candidates: list[Candidate] | tuple[Candidate, ...]) -> list[CandidateFeatureRecord]:
@@ -145,7 +164,7 @@ class CandidateFeatureExtractor:
         text = context.full_text
         career_text = context.career_text
         profile_text = context.profile_text
-        ir_count = TextNormalizer.count_terms(career_text, RETRIEVAL_TERMS + RANKING_TERMS)
+        ir_count = TextNormalizer.count_terms_normalized(context.norm_career_text, RETRIEVAL_TERMS + RANKING_TERMS)
         production_ir_roles = sum(
             1
             for role in context.candidate.career_history
@@ -156,32 +175,32 @@ class CandidateFeatureExtractor:
             for role in context.candidate.career_history
             if _role_has(role, PRODUCTION_TERMS) and _role_has(role, EVALUATION_TERMS)
         )
-        embedding_terms = TextNormalizer.has_any(text, EMBEDDING_TERMS)
-        vector_terms = TextNormalizer.has_any(text, VECTOR_DB_TERMS)
-        bm25_terms = TextNormalizer.has_any(text, ("bm25", "tf-idf"))
-        dense_terms = TextNormalizer.has_any(text, ("dense", "vector", "embedding", "semantic"))
+        embedding_terms = TextNormalizer.has_any_normalized(context.norm_full_text, EMBEDDING_TERMS)
+        vector_terms = TextNormalizer.has_any_normalized(context.norm_full_text, VECTOR_DB_TERMS)
+        bm25_terms = TextNormalizer.has_any_normalized(context.norm_full_text, ("bm25", "tf-idf"))
+        dense_terms = TextNormalizer.has_any_normalized(context.norm_full_text, ("dense", "vector", "embedding", "semantic"))
         title_family = TextNormalizer.role_family(context.candidate.profile.current_title)
         summary_family = TextNormalizer.role_family(profile_text)
         consistency = 1.0 if title_family == summary_family else 0.5 if title_family in {"software", "ai_ml", "retrieval"} and summary_family in {"software", "ai_ml", "retrieval"} else 0.0
-        specificity_terms = TextNormalizer.count_terms(text, PRODUCTION_TERMS + OWNERSHIP_TERMS + PRODUCT_IMPACT_TERMS)
-        generic_penalty = TextNormalizer.count_terms(text, ("professional with", "open to roles", "curious about", "emerging ai capabilities"))
+        specificity_terms = TextNormalizer.count_terms_normalized(context.norm_full_text, PRODUCTION_TERMS + OWNERSHIP_TERMS + PRODUCT_IMPACT_TERMS)
+        generic_penalty = TextNormalizer.count_terms_normalized(context.norm_full_text, ("professional with", "open to roles", "curious about", "emerging ai capabilities"))
 
         return {
-            "jd_semantic_bm25_score": _lexical_jd_score(text),
+            "jd_semantic_bm25_score": _lexical_jd_score(context.norm_full_text),
             "core_ir_phrase_count": ir_count,
-            "production_ir_evidence_score": clamp(production_ir_roles / 2.0 + TextNormalizer.count_terms(career_text, PRODUCTION_TERMS) * 0.03),
+            "production_ir_evidence_score": clamp(production_ir_roles / 2.0 + TextNormalizer.count_terms_normalized(context.norm_career_text, PRODUCTION_TERMS) * 0.03),
             "production_eval_cooccurrence_score": clamp(production_eval_roles / 2.0),
-            "ranking_eval_phrase_score": score_by_terms(text, EVALUATION_TERMS, cap=4),
-            "query_understanding_score": score_by_terms(text, ("query understanding", "query rewriting", "search intent", "search relevance"), cap=3),
+            "ranking_eval_phrase_score": score_by_terms_normalized(context.norm_full_text, EVALUATION_TERMS, cap=4),
+            "query_understanding_score": score_by_terms_normalized(context.norm_full_text, ("query understanding", "query rewriting", "search intent", "search relevance"), cap=3),
             "embedding_system_evidence": weighted_flag(embedding_terms and vector_terms),
             "hybrid_search_evidence": weighted_flag(bm25_terms and dense_terms) + 0,
-            "candidate_matching_domain_score": score_by_terms(text, ("candidate matching", "job matching", "recruiter search", "talent marketplace", "matching system"), cap=3),
-            "llm_integration_depth_score": _llm_depth(text),
+            "candidate_matching_domain_score": score_by_terms_normalized(context.norm_full_text, ("candidate matching", "job matching", "recruiter search", "talent marketplace", "matching system"), cap=3),
+            "llm_integration_depth_score": _llm_depth(context.norm_full_text),
             "framework_demo_penalty_text": weighted_flag(
-                TextNormalizer.has_any(text, DEMO_ONLY_TERMS)
-                and not TextNormalizer.has_any(career_text, PRODUCTION_TERMS)
+                TextNormalizer.has_any_normalized(context.norm_full_text, DEMO_ONLY_TERMS)
+                and not TextNormalizer.has_any_normalized(context.norm_career_text, PRODUCTION_TERMS)
             ),
-            "product_impact_phrase_score": score_by_terms(text, PRODUCT_IMPACT_TERMS, cap=8),
+            "product_impact_phrase_score": score_by_terms_normalized(context.norm_full_text, PRODUCT_IMPACT_TERMS, cap=8),
             "writing_clarity_score": clamp((specificity_terms / 12.0) - (generic_penalty * 0.08)),
             "title_summary_consistency": consistency,
         }
@@ -195,7 +214,7 @@ class CandidateFeatureExtractor:
         avg_tenure = safe_mean(float(duration) for duration in durations)
         short_hops = sum(1 for duration in durations if duration < 18)
         senior_title = TextNormalizer.has_any(candidate.profile.current_title, ("senior", "lead", "staff", "principal", "architect"))
-        ownership = TextNormalizer.count_terms(context.career_text, OWNERSHIP_TERMS)
+        ownership = TextNormalizer.count_terms_normalized(context.norm_career_text, OWNERSHIP_TERMS)
 
         applied_ml_months = _sum_role_months(roles, ML_TERMS + RETRIEVAL_TERMS + RANKING_TERMS)
         ir_months = _sum_role_months(roles, RETRIEVAL_TERMS + RANKING_TERMS + EMBEDDING_TERMS)
@@ -239,7 +258,7 @@ class CandidateFeatureExtractor:
         supported_core_count = sum(
             1
             for skill in skills
-            if _skill_has(skill, CORE_AI_SKILLS) and TextNormalizer.has_any(career_text, (skill.name,))
+            if _skill_has(skill, CORE_AI_SKILLS) and TextNormalizer.has_any_normalized(context.norm_career_text, (skill.name,))
         )
         assessment_scores = {
             name: score
@@ -253,13 +272,13 @@ class CandidateFeatureExtractor:
         nlp_ir = sum(1 for skill in skills if _skill_has(skill, RETRIEVAL_TERMS + RANKING_TERMS + ("nlp",)))
 
         return {
-            "python_strength_score": _skill_depth(skills, PYTHON_TERMS, context.full_text, cap_months=48),
+            "python_strength_score": _skill_depth(skills, PYTHON_TERMS, context.norm_full_text, cap_months=48),
             "vector_db_skill_coverage": clamp(_matching_skill_count(skills, VECTOR_DB_TERMS) / 4.0),
-            "retrieval_skill_depth": _skill_depth(skills, RETRIEVAL_TERMS + EMBEDDING_TERMS + VECTOR_DB_TERMS, context.full_text, cap_months=60),
-            "ranking_skill_depth": _skill_depth(skills, RANKING_TERMS + EVALUATION_TERMS, context.full_text, cap_months=60),
-            "llm_finetuning_skill_score": _skill_depth(skills, ("lora", "qlora", "peft", "fine-tuning", "finetuning", "hugging face", "transformers"), context.full_text, cap_months=48),
-            "mlops_skill_score": _skill_depth(skills, MLOPS_TERMS, context.full_text, cap_months=48),
-            "data_pipeline_support_score": _skill_depth(skills, DATA_PIPELINE_TERMS, context.full_text, cap_months=48),
+            "retrieval_skill_depth": _skill_depth(skills, RETRIEVAL_TERMS + EMBEDDING_TERMS + VECTOR_DB_TERMS, context.norm_full_text, cap_months=60),
+            "ranking_skill_depth": _skill_depth(skills, RANKING_TERMS + EVALUATION_TERMS, context.norm_full_text, cap_months=60),
+            "llm_finetuning_skill_score": _skill_depth(skills, ("lora", "qlora", "peft", "fine-tuning", "finetuning", "hugging face", "transformers"), context.norm_full_text, cap_months=48),
+            "mlops_skill_score": _skill_depth(skills, MLOPS_TERMS, context.norm_full_text, cap_months=48),
+            "data_pipeline_support_score": _skill_depth(skills, DATA_PIPELINE_TERMS, context.norm_full_text, cap_months=48),
             "skill_assessment_core_mean": round(safe_mean((score / 100.0 for score in assessment_scores.values())), 4),
             "skill_assessment_core_max": round(max((score / 100.0 for score in assessment_scores.values()), default=0.0), 4),
             "skill_assessment_coverage": len(assessment_scores),
@@ -314,9 +333,9 @@ class CandidateFeatureExtractor:
         product_months = _sum_role_months(roles, PRODUCT_INDUSTRIES)
         services_only = all(_is_consulting_role(role) for role in roles) and product_months == 0
         startup_months = sum(role.duration_months for role in roles if role.company_size in {"11-50", "51-200", "201-500"} and _role_has(role, PRODUCT_INDUSTRIES))
-        large_scale = score_by_terms(context.career_text, ("50m", "million", "throughput", "large index", "distributed", "high traffic", "500gb"), cap=4)
-        ownership = score_by_terms(context.career_text, OWNERSHIP_TERMS, cap=10)
-        cross_functional = score_by_terms(context.career_text, PRODUCT_IMPACT_TERMS + ("cross-functional", "stakeholder"), cap=8)
+        large_scale = score_by_terms_normalized(context.norm_career_text, ("50m", "million", "throughput", "large index", "distributed", "high traffic", "500gb"), cap=4)
+        ownership = score_by_terms_normalized(context.norm_career_text, OWNERSHIP_TERMS, cap=10)
+        cross_functional = score_by_terms_normalized(context.norm_career_text, PRODUCT_IMPACT_TERMS + ("cross-functional", "stakeholder"), cap=8)
         title_family = TextNormalizer.role_family(candidate.profile.current_title)
         role_fit = 1.0 if title_family in {"ai_ml", "retrieval"} else 0.75 if title_family == "software" else 0.35 if title_family == "management" else 0.0
         nontech = weighted_flag(TextNormalizer.has_any(candidate.profile.current_title, NEGATIVE_ARCHETYPES))
@@ -328,7 +347,7 @@ class CandidateFeatureExtractor:
         return {
             "product_company_exposure_months": product_months,
             "services_only_penalty": weighted_flag(services_only),
-            "current_industry_fit_score": score_by_terms(candidate.profile.current_industry, PRODUCT_INDUSTRIES, cap=1),
+            "current_industry_fit_score": score_by_terms_normalized(TextNormalizer.normalize(candidate.profile.current_industry), PRODUCT_INDUSTRIES, cap=1),
             "startup_or_scaleup_exposure": round(startup_months / 12.0, 3),
             "large_scale_exposure": large_scale,
             "ownership_verbs_score": ownership,
@@ -349,7 +368,7 @@ class CandidateFeatureExtractor:
         research_only = TextNormalizer.has_any(fields + " " + degrees + " " + context.profile_text, RESEARCH_TERMS) and not production_present
 
         return {
-            "cs_ai_field_score": score_by_terms(fields, ("computer science", "artificial intelligence", "machine learning", "data science", "statistics", "mathematics", "information technology"), cap=2),
+            "cs_ai_field_score": score_by_terms_normalized(TextNormalizer.normalize(fields), ("computer science", "artificial intelligence", "machine learning", "data science", "statistics", "mathematics", "information technology"), cap=2),
             "degree_level_score": degree_score,
             "institution_tier_score": tier,
             "education_timeline_validity": timeline_valid,
@@ -401,7 +420,7 @@ class CandidateFeatureExtractor:
         template_duplicate = weighted_flag(
             TextNormalizer.has_any(candidate.profile.summary, ("professional with", "open to roles"))
             and TextNormalizer.has_any(candidate.profile.current_title, NEGATIVE_ARCHETYPES)
-            and TextNormalizer.count_terms(context.skill_text, CORE_AI_SKILLS) >= 3
+            and TextNormalizer.count_terms_normalized(context.norm_skill_text, CORE_AI_SKILLS) >= 3
         )
         signals = candidate.redrob_signals
         behavioral_inconsistent = weighted_flag(
@@ -409,7 +428,7 @@ class CandidateFeatureExtractor:
             or (signals.saved_by_recruiters_30d >= 10 and not (signals.verified_email or signals.verified_phone))
         )
         retrieval_stuffing = weighted_flag(
-            TextNormalizer.count_terms(context.skill_text, RETRIEVAL_TERMS + VECTOR_DB_TERMS + EMBEDDING_TERMS) >= 4
+            TextNormalizer.count_terms_normalized(context.norm_skill_text, RETRIEVAL_TERMS + VECTOR_DB_TERMS + EMBEDDING_TERMS) >= 4
             and float(semantic["production_ir_evidence_score"]) < 0.2
         )
         honeypot = (
@@ -454,6 +473,11 @@ class _CandidateContext:
         self.career_text = candidate.career_text
         self.skill_text = candidate.skill_text
         self.full_text = candidate.full_text
+        
+        self.norm_profile_text = TextNormalizer.normalize(self.profile_text)
+        self.norm_career_text = TextNormalizer.normalize(self.career_text)
+        self.norm_skill_text = TextNormalizer.normalize(self.skill_text)
+        self.norm_full_text = TextNormalizer.normalize(self.full_text)
 
 
 def _role_text(role: CareerHistory) -> str:
@@ -476,8 +500,8 @@ def _sum_role_months(roles: tuple[CareerHistory, ...], terms: tuple[str, ...]) -
     return sum(role.duration_months for role in roles if _role_has(role, terms))
 
 
-def _lexical_jd_score(text: str) -> float:
-    tokens = TextNormalizer.tokenize(text)
+def _lexical_jd_score(norm_text: str) -> float:
+    tokens = [t for t in norm_text.split() if t]
     if not tokens:
         return 0.0
     counts = Counter(tokens)
@@ -488,15 +512,15 @@ def _lexical_jd_score(text: str) -> float:
             continue
         if len(term_tokens) == 1:
             score += math.log1p(counts.get(term_tokens[0], 0))
-        elif TextNormalizer.has_any(text, (term,)):
+        elif TextNormalizer.has_any_normalized(norm_text, (term,)):
             score += 1.5
     return clamp(score / 25.0)
 
 
-def _llm_depth(text: str) -> float:
-    strong = TextNormalizer.count_terms(text, ("fine-tuning", "finetuning", "lora", "qlora", "peft", "hugging face", "reranking"))
-    rag = TextNormalizer.count_terms(text, ("rag", "llm", "openai embeddings", "transformers"))
-    demo = TextNormalizer.count_terms(text, ("langchain", "prompt", "chatgpt", "demo", "side project"))
+def _llm_depth(norm_text: str) -> float:
+    strong = TextNormalizer.count_terms_normalized(norm_text, ("fine-tuning", "finetuning", "lora", "qlora", "peft", "hugging face", "reranking"))
+    rag = TextNormalizer.count_terms_normalized(norm_text, ("rag", "llm", "openai embeddings", "transformers"))
+    demo = TextNormalizer.count_terms_normalized(norm_text, ("langchain", "prompt", "chatgpt", "demo", "side project"))
     return clamp(strong * 0.22 + rag * 0.08 - demo * 0.04)
 
 
@@ -539,7 +563,7 @@ def _title_chaser_signal(roles: tuple[CareerHistory, ...]) -> float:
     return weighted_flag(median(durations) < 18 and inflation >= 2)
 
 
-def _skill_depth(skills: tuple[Skill, ...], terms: tuple[str, ...], text: str, *, cap_months: int) -> float:
+def _skill_depth(skills: tuple[Skill, ...], terms: tuple[str, ...], norm_text: str, *, cap_months: int) -> float:
     score = 0.0
     for skill in skills:
         if _skill_has(skill, terms):
@@ -547,7 +571,7 @@ def _skill_depth(skills: tuple[Skill, ...], terms: tuple[str, ...], text: str, *
             duration = clamp(skill.duration_months / cap_months)
             endorsement = log_scale(skill.endorsements, 50)
             score += proficiency * 0.45 + duration * 0.4 + endorsement * 0.15
-    text_support = 0.15 if TextNormalizer.has_any(text, terms) else 0.0
+    text_support = 0.15 if TextNormalizer.has_any_normalized(norm_text, terms) else 0.0
     return round(clamp(score / 2.0 + text_support), 4)
 
 
@@ -555,7 +579,7 @@ def _certification_score(candidate: Candidate) -> float:
     text = " ".join(f"{cert.name} {cert.issuer}" for cert in candidate.certifications)
     if not text:
         return 0.0
-    return score_by_terms(text, ("aws machine learning", "gcp", "azure ai", "deep learning", "nlp", "machine learning"), cap=2)
+    return score_by_terms_normalized(TextNormalizer.normalize(text), ("aws machine learning", "gcp", "azure ai", "deep learning", "nlp", "machine learning"), cap=2)
 
 
 def _notice_score(days: int) -> float:

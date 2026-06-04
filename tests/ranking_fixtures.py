@@ -141,6 +141,22 @@ def candidate_record(
             "availability_multiplier": ["active and open to work"],
         },
     )
+    
+    text_parts: list[str] = []
+    for snippets in evidence.by_feature.values():
+        text_parts.extend(snippets)
+    for group in (semantic, experience, skill, behavioral, career, education, logistics):
+        for feature, value in group.items():
+            numeric = float(value)
+            if numeric > 0:
+                text_parts.extend(feature.replace("_", " ") for _ in range(2 if numeric >= 0.65 else 1))
+    
+    from candidate_processor.normalizer import TextNormalizer
+    from collections import Counter
+    terms = TextNormalizer.tokenize(" ".join(text_parts))
+    retrieval_term_counts = dict(Counter(terms))
+    retrieval_doc_len = len(terms)
+
     return CandidateFeatureRecord(
         candidate_id=candidate_id,
         semantic_features=semantic,
@@ -152,4 +168,6 @@ def candidate_record(
         logistics_features=logistics,
         anomaly_features=anomaly,
         evidence=evidence,
+        retrieval_term_counts=retrieval_term_counts,
+        retrieval_doc_len=retrieval_doc_len,
     )

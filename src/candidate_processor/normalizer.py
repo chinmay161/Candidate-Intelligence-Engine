@@ -43,11 +43,23 @@ class TextNormalizer:
         return sum(normalized.count(term) for term in cls.normalize_terms(tuple(terms)) if term)
 
     @classmethod
+    def count_terms_normalized(cls, normalized_text: str, terms: Sequence[str]) -> int:
+        if not terms:
+            return 0
+        return sum(normalized_text.count(term) for term in cls.normalize_terms(tuple(terms)) if term)
+
+    @classmethod
     def has_any(cls, text: str, terms: Sequence[str]) -> bool:
         if not terms:
             return False
         normalized = cls.normalize(text)
         return any(term in normalized for term in cls.normalize_terms(tuple(terms)) if term)
+
+    @classmethod
+    def has_any_normalized(cls, normalized_text: str, terms: Sequence[str]) -> bool:
+        if not terms:
+            return False
+        return any(term in normalized_text for term in cls.normalize_terms(tuple(terms)) if term)
 
     @classmethod
     @lru_cache(maxsize=2_000)
@@ -83,7 +95,7 @@ class TextNormalizer:
     def role_family(cls, text: str) -> str:
         normalized = cls.normalize(text)
         scores = {
-            family: cls.count_terms(normalized, terms)
+            family: cls.count_terms_normalized(normalized, terms)
             for family, terms in ROLE_FAMILY_TERMS.items()
         }
         if not scores or max(scores.values()) == 0:
@@ -114,6 +126,9 @@ def months_between_approx(start_year: int, end_year: int) -> int:
 
 def score_by_terms(text: str, terms: Sequence[str], cap: int = 5) -> float:
     return clamp(TextNormalizer.count_terms(text, terms) / cap)
+
+def score_by_terms_normalized(normalized_text: str, terms: Sequence[str], cap: int = 5) -> float:
+    return clamp(TextNormalizer.count_terms_normalized(normalized_text, terms) / cap)
 
 
 def weighted_flag(condition: bool) -> float:

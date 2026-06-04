@@ -166,6 +166,8 @@ class CandidateFeatureRecord:
     logistics_features: dict[str, float | int]
     anomaly_features: dict[str, float | int]
     evidence: CandidateEvidence
+    retrieval_term_counts: dict[str, int] = field(default_factory=dict)
+    retrieval_doc_len: int = 0
 
     def to_row(self) -> dict[str, Any]:
         return {
@@ -179,4 +181,6 @@ class CandidateFeatureRecord:
             "logistics_features": self.logistics_features,
             "anomaly_features": self.anomaly_features,
             "evidence": self.evidence.to_dict(),
+            "retrieval_term_counts": self.retrieval_term_counts,
+            "retrieval_doc_len": self.retrieval_doc_len,
         }

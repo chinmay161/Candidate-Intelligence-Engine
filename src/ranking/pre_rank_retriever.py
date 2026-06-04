@@ -52,7 +52,10 @@ class PreRankRetriever:
         total = 0
         for ordinal, candidate in enumerate(candidates):
             total += 1
-            score = self.score_candidate(analysis, candidate, query_terms)
+            counts = candidate.retrieval_term_counts
+            doc_len = candidate.retrieval_doc_len
+            score = self.score_candidate(analysis, candidate, query_terms, counts, doc_len)
+            candidate.retrieval_term_counts.clear()
             hit = RetrievalHit(candidate=candidate, score=round(score, 6), ordinal=ordinal)
             item = (hit.score, -ordinal, hit)
             if len(heap) < limit:
@@ -68,6 +71,8 @@ class PreRankRetriever:
         analysis: JDAnalysis,
         candidate: CandidateFeatureRecord,
         query_terms: tuple[str, ...],
+        term_counts: dict[str, int],
+        doc_len: int,
     ) -> float:
         raise NotImplementedError
 
@@ -101,31 +106,7 @@ class PreRankRetriever:
                 ordered_unique[token] = None
         return tuple(ordered_unique)
 
-    def _candidate_terms(self, candidate: CandidateFeatureRecord) -> list[str]:
-        text_parts: list[str] = []
-        for snippets in candidate.evidence.by_feature.values():
-            text_parts.extend(snippets)
-        text_parts.extend(self._active_feature_tokens(candidate))
-        return TextNormalizer.tokenize(" ".join(text_parts))
 
-    def _active_feature_tokens(self, candidate: CandidateFeatureRecord) -> list[str]:
-        tokens: list[str] = []
-        for group in (
-            candidate.semantic_features,
-            candidate.experience_features,
-            candidate.skill_features,
-            candidate.behavioral_features,
-            candidate.career_features,
-            candidate.education_features,
-            candidate.logistics_features,
-        ):
-            for feature, value in group.items():
-                numeric = float(value)
-                if numeric <= 0:
-                    continue
-                repetitions = 2 if numeric >= 0.65 else 1
-                tokens.extend(feature.replace("_", " ") for _ in range(repetitions))
-        return tokens
 
 
 class BM25Retriever(PreRankRetriever):
@@ -141,15 +122,14 @@ class BM25Retriever(PreRankRetriever):
         analysis: JDAnalysis,
         candidate: CandidateFeatureRecord,
         query_terms: tuple[str, ...],
+        term_counts: dict[str, int],
+        doc_len: int,
     ) -> float:
-        terms = self._candidate_terms(candidate)
-        if not terms or not query_terms:
+        if not term_counts or not query_terms:
             return 0.0
-        counts = Counter(terms)
-        doc_len = len(terms)
         score = 0.0
         for term in query_terms:
-            frequency = counts.get(term, 0)
+            frequency = term_counts.get(term, 0)
             if frequency <= 0:
                 continue
             denominator = frequency + self.k1 * (1.0 - self.b + self.b * doc_len / self.average_doc_length)
@@ -165,15 +145,15 @@ class TFIDFRetriever(PreRankRetriever):
         analysis: JDAnalysis,
         candidate: CandidateFeatureRecord,
         query_terms: tuple[str, ...],
+        term_counts: dict[str, int],
+        doc_len: int,
     ) -> float:
-        terms = self._candidate_terms(candidate)
-        if not terms or not query_terms:
+        if not term_counts or not query_terms:
             return 0.0
-        counts = Counter(terms)
-        length_norm = math.sqrt(sum(value * value for value in counts.values())) or 1.0
+        length_norm = math.sqrt(sum(value * value for value in term_counts.values())) or 1.0
         query_counts = Counter(query_terms)
         query_norm = math.sqrt(sum(value * value for value in query_counts.values())) or 1.0
-        dot = sum((counts.get(term, 0) / length_norm) * (weight / query_norm) for term, weight in query_counts.items())
+        dot = sum((term_counts.get(term, 0) / length_norm) * (weight / query_norm) for term, weight in query_counts.items())
         return clamp(dot * 3.0)
 
 
@@ -196,9 +176,11 @@ class HybridRetriever(PreRankRetriever):
         analysis: JDAnalysis,
         candidate: CandidateFeatureRecord,
         query_terms: tuple[str, ...],
+        term_counts: dict[str, int],
+        doc_len: int,
     ) -> float:
-        bm25_score = self.bm25.score_candidate(analysis, candidate, query_terms)
-        tfidf_score = self.tfidf.score_candidate(analysis, candidate, query_terms)
+        bm25_score = self.bm25.score_candidate(analysis, candidate, query_terms, term_counts, doc_len)
+        tfidf_score = self.tfidf.score_candidate(analysis, candidate, query_terms, term_counts, doc_len)
         feature_score = self._weighted_feature_hint(analysis, candidate)
         lexical = bm25_score * 0.60 + tfidf_score * 0.40
         return clamp(lexical * self.lexical_weight + feature_score * (1.0 - self.lexical_weight))

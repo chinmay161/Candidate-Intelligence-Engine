@@ -8,7 +8,7 @@
   },
   "score_variance": 526.2563257410492,
   "duplicate_score_rate": 0.010000000000000009,
-  "penalty_rate": 0.0,
+  "penalty_rate": 1.0,
   "confidence_distribution": {
     "mean": 0.80709119,
     "median": 0.8276465,
