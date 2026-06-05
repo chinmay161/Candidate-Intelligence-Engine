@@ -40,6 +40,7 @@ class CandidateScorer:
             semantic_score=semantic_score,
             feature_match_score=feature_match.match_score,
             penalty_score=penalty_score,
+            missing_requirements_count=len(feature_match.missing_requirements),
             tracker=tracker,
         )
         return CandidateMatch(

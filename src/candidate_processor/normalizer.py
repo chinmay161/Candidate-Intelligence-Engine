@@ -19,7 +19,7 @@ class TextNormalizer:
     _years_pattern = re.compile(r"(?P<years>\d+(?:\.\d+)?)\s*\+?\s*(?:years|yrs)", re.IGNORECASE)
 
     @classmethod
-    @lru_cache(maxsize=200_000)
+    @lru_cache(maxsize=2048)
     def normalize(cls, text: str) -> str:
         lowered = text.casefold()
         return cls._non_word_pattern.sub(" ", lowered).strip()

@@ -1,6 +1,6 @@
 {
   "full_system": {
-    "runtime": 3.872293399999762,
+    "runtime": 4.273236900000484,
     "score_distribution": {
       "mean": 0.85
     },
@@ -8,7 +8,7 @@
     "reasoning_quality": "High"
   },
   "no_behavioral_signals": {
-    "runtime": 2.912372800000412,
+    "runtime": 4.211817100000189,
     "score_distribution": {
       "mean": 0.85
     },
@@ -16,7 +16,7 @@
     "reasoning_quality": "High"
   },
   "no_honeypot_detection": {
-    "runtime": 2.8722358999993958,
+    "runtime": 4.178735999999844,
     "score_distribution": {
       "mean": 0.85
     },
@@ -24,7 +24,7 @@
     "reasoning_quality": "High"
   },
   "no_reasoning_layer": {
-    "runtime": 2.8950754999996207,
+    "runtime": 4.17874860000029,
     "score_distribution": {
       "mean": 0.85
     },
@@ -32,7 +32,7 @@
     "reasoning_quality": "None"
   },
   "semantic_only": {
-    "runtime": 2.792131700000027,
+    "runtime": 4.12597950000054,
     "score_distribution": {
       "mean": 0.85
     },

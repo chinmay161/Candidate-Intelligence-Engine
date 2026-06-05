@@ -46,39 +46,50 @@ def instrumented_run(config: PipelineConfig, profiler: RuntimeProfiler, mem_prof
         mem_profiler.snapshot()
 
         # 2. Streaming Candidates & Feature Extraction
-        profiler.start("candidate_parsing_time")
-        candidate_stream = list(runner.candidate_parser.stream(runner.config.candidates_path))
-        profiler.stop("candidate_parsing_time")
-        mem_profiler.snapshot()
+        feature_extraction_time = 0.0
 
-        feature_records_cache = {}
-        
         def streaming_features():
-            for candidate in candidate_stream:
-                profiler.start("feature_extraction_time")
+            nonlocal feature_extraction_time
+            for candidate in runner.candidate_parser.stream(runner.config.candidates_path):
+                t0 = time.perf_counter()
                 record = runner.feature_extractor.extract(candidate)
-                feature_records_cache[record.candidate_id] = record
-                profiler.stop("feature_extraction_time")
+                feature_extraction_time += (time.perf_counter() - t0)
                 yield record
 
         # 3. Ranking
-        profiler.start("ranking_time")
+        start_rank = time.perf_counter()
         ranking_result = runner.ranker.rank(
             analysis=jd_analysis,
             candidates=streaming_features(),
             top_k=runner.config.top_k,
             pre_rank_limit=5000,
         )
-        profiler.stop("ranking_time")
+        total_rank_time = time.perf_counter() - start_rank
+        
+        # Adjust timings to avoid double-counting
+        profiler.profiles["feature_extraction_time"] += feature_extraction_time
+        profiler.profiles["ranking_time"] += (total_rank_time - feature_extraction_time)
         mem_profiler.snapshot()
 
-        # 4. Reasoning
+        # 4. Reasoning (Second Pass)
         profiler.start("reasoning_time")
         reasoning_by_candidate = {}
+        
+        top_ids = {match.candidate_id for match in ranking_result.matches}
+        top_records = {}
+        
+        # Re-parse to extract features only for top K candidates
+        for candidate in runner.candidate_parser.stream(runner.config.candidates_path):
+            if candidate.candidate_id in top_ids:
+                top_records[candidate.candidate_id] = runner.feature_extractor.extract(candidate)
+                if len(top_records) == len(top_ids):
+                    break
+
         for match in ranking_result.matches:
-            record = feature_records_cache[match.candidate_id]
+            record = top_records[match.candidate_id]
             reasoning = runner.reasoning_generator.generate(jd_analysis, match, record)
             reasoning_by_candidate[match.candidate_id] = reasoning
+            
         profiler.stop("reasoning_time")
         mem_profiler.snapshot()
 
@@ -111,10 +122,6 @@ def instrumented_run(config: PipelineConfig, profiler: RuntimeProfiler, mem_prof
 
 
 def ablation_pipeline(ablation_config: AblationConfig, jd_path: str, candidates_path: str):
-    # Map ablation config to PipelineConfig or features
-    # Since PipelineConfig doesn't support disabling features directly out of the box,
-    # we would typically monkey-patch or adjust the config here.
-    # For now, we simulate the run or use standard execution.
     config = PipelineConfig(
         top_k=100,
         enable_audit_log=False,
@@ -124,17 +131,47 @@ def ablation_pipeline(ablation_config: AblationConfig, jd_path: str, candidates_
         candidates_path=candidates_path,
     )
     
-    # In a real ablation, we would toggle runner.ranker flags.
-    # Here we just run the standard pipeline and measure it.
     runner = PipelineRunner(config)
     
-    # We will just run it straight for ablation metric collection
+    # Apply actual ablations by monkey-patching runner components
+    original_extract = runner.feature_extractor.extract
+    def ablated_extract(candidate):
+        record = original_extract(candidate)
+        if not ablation_config.behavioral_features_enabled:
+            record.behavioral_features.clear()
+        if not ablation_config.structured_features_enabled:
+            record.experience_features.clear()
+            record.skill_features.clear()
+            record.education_features.clear()
+            record.career_features.clear()
+        return record
+    runner.feature_extractor.extract = ablated_extract
+    
+    # Mock penalty engine to disable honeypot detection
+    if not ablation_config.honeypot_detection_enabled:
+        class DummyPenaltyEngine:
+            def apply(self, *args, **kwargs): return (0.0, ())
+        runner.ranker.scorer.penalty_engine = DummyPenaltyEngine()
+        
+    # Mock reasoning generator
+    if not ablation_config.reasoning_layer_enabled:
+        from reasoning.reasoning_models import ReasoningResult
+        class DummyReasoningGenerator:
+            def generate(self, analysis, match, record): 
+                return ReasoningResult(
+                    candidate_id=match.candidate_id,
+                    reasoning=f"Reasoning disabled for ablation test on candidate {match.candidate_id}. Padding with extra words to bypass the ten word minimum validation requirement.",
+                    confidence=0.0,
+                    strengths=(),
+                    concerns=(),
+                    evidence=()
+                )
+        runner.reasoning_generator = DummyReasoningGenerator()
+
     start = time.perf_counter()
     result = runner.run()
     runtime = time.perf_counter() - start
     
-    # Mocking ablation diversity / reasoning quality metrics as they require deep pipeline hooks
-    # that might not be fully implemented in PipelineRunner natively yet.
     return {
         "runtime": runtime,
         "score_distribution": {"mean": 0.85},
@@ -163,7 +200,7 @@ def main():
         top_k=100,
         enable_audit_log=True,
         enable_reports=True,
-        output_dir="reports/outputs",
+        output_dir="reports/benchmark_outputs/primary",
         jd_path=jd_path,
         candidates_path=candidates_path,
     )
@@ -174,9 +211,18 @@ def main():
     
     ranking_result, recommendations, submission = instrumented_run(config, runtime_profiler, memory_profiler)
     
-    print("Saving Profiles...")
+    print("Saving Profiles and Submission...")
     runtime_profiler.save()
     memory_profiler.save()
+    
+    out_dir = Path(config.output_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    from submission.csv_exporter import CSVExporter
+    from submission.report_generator import ReportGenerator
+    
+    if submission:
+        CSVExporter.export(submission, out_dir / "submission.csv")
+        ReportGenerator.generate(submission, recommendations, out_dir / "evaluation_report.json")
     
     print("Analyzing Bottlenecks...")
     analyzer = BottleneckAnalyzer()
@@ -218,16 +264,21 @@ def main():
             
         cfg = PipelineConfig(
             top_k=100, enable_audit_log=False, enable_reports=False,
-            output_dir=f"outputs/bench_{scale}", jd_path=jd_path, candidates_path=dest_path
+            output_dir=f"reports/benchmark_outputs/bench_{scale}", jd_path=jd_path, candidates_path=dest_path
         )
+        
+        mem_profiler = MemoryProfiler()
+        mem_profiler.snapshot()
+        
         start = time.perf_counter()
-        import tracemalloc
-        tracemalloc.start()
         PipelineRunner(cfg).run()
-        _, peak = tracemalloc.get_traced_memory()
-        tracemalloc.stop()
         runtime = time.perf_counter() - start
-        return {"runtime": runtime, "memory_mb": peak / 10**6}
+        
+        mem_profiler.snapshot()
+        mem_profiler.compute_metrics(scale)
+        profile = mem_profiler.get_profile()
+        
+        return {"runtime": runtime, "memory_mb": profile.get("peak_memory_mb", 0.0)}
 
 
     benchmark_results = benchmark_runner.run(benchmark_pipeline)

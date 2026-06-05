@@ -28,6 +28,7 @@ class ScoreCalculator:
         semantic_score: float,
         feature_match_score: float,
         penalty_score: float,
+        missing_requirements_count: int = 0,
         tracker: ContributionTracker | None = None,
     ) -> ScoringBreakdown:
         tracker = tracker or ContributionTracker()
@@ -73,6 +74,19 @@ class ScoreCalculator:
         )
 
         raw_score = clamp(semantic_score * 0.30 + feature_match_score * 0.50 + weighted_feature_score * 0.20)
+        
+        # Severe deduction for missing required JD skills
+        if missing_requirements_count > 0:
+            raw_score *= (0.85 ** missing_requirements_count)
+            tracker.add(
+                feature="missing_requirements_penalty",
+                group="penalty",
+                weight=1.0,
+                raw_value=float(missing_requirements_count),
+                contribution=-(raw_score - (raw_score * (0.85 ** missing_requirements_count))), # Approximate tracking
+                reason=f"Deduction for {missing_requirements_count} missing required skills"
+            )
+
         final_score = clamp(raw_score - penalty_score)
         return ScoringBreakdown(
             semantic_score=round(semantic_score, 6),

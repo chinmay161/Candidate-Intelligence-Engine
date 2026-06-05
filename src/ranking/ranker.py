@@ -46,24 +46,20 @@ class Ranker:
             candidate_pool = pre_ranked.candidates
             total = pre_ranked.total_candidates
 
-        if top_k is None:
-            scored: list[CandidateMatch] = []
-            for candidate in candidate_pool:
-                scored.append(self.scorer.score(analysis, candidate))
+        scored: list[CandidateMatch] = []
+        for candidate in candidate_pool:
+            if top_k is not None and pre_rank_limit is None:
                 total += 1
-            selected = tuple(match for _, match in sorted(enumerate(scored), key=lambda item: (-item[1].score, item[0])))
+            scored.append(self.scorer.score(analysis, candidate))
+
+        # Normalize across the entire pool before truncating
+        normalized = self.normalizer.normalize(tuple(scored), method=normalization)
+
+        if top_k is None:
+            ranked = tuple(match for _, match in sorted(enumerate(normalized), key=lambda item: (-item[1].score, item[0])))
         else:
-            def scored_stream() -> Iterable[CandidateMatch]:
-                nonlocal total
-                for candidate in candidate_pool:
-                    if pre_rank_limit is None:
-                        total += 1
-                    yield self.scorer.score(analysis, candidate)
-
-            selected = self.topk_selector.select(scored_stream(), k=top_k)
-
-        normalized = self.normalizer.normalize(selected, method=normalization)
-        ranked = tuple(match for _, match in sorted(enumerate(normalized), key=lambda item: (-item[1].score, item[0])))
+            selected = self.topk_selector.select(normalized, k=top_k)
+            ranked = tuple(match for _, match in sorted(enumerate(selected), key=lambda item: (-item[1].score, item[0])))
         return RankingResult(
             matches=ranked,
             total_candidates=total,

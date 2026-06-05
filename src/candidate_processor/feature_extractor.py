@@ -70,18 +70,33 @@ class EvidenceExtractor:
         "availability_multiplier": ("open to work", "active", "response"),
     }
 
+    def __init__(self):
+        self._feature_terms = {
+            name: TextNormalizer.normalize_terms(tuple(terms))
+            for name, terms in self.IMPORTANT_FEATURE_TERMS.items()
+        }
+        self._all_terms = set(term for terms in self._feature_terms.values() for term in terms if term)
+
     def extract(self, candidate: Candidate) -> CandidateEvidence:
         text = candidate.full_text
         sentences = TextNormalizer.sentences(text)
         normalized_sentences = [TextNormalizer.normalize(sentence) for sentence in sentences]
+        
+        # Pre-filter sentences that have AT LEAST ONE of the relevant terms across ALL features
+        # This drastically reduces the number of sentences to check for specific features
+        valid_sentence_pairs = []
+        for sentence, norm_sentence in zip(sentences, normalized_sentences):
+            if any(term in norm_sentence for term in self._all_terms):
+                valid_sentence_pairs.append((sentence, norm_sentence))
+
         evidence: dict[str, list[str]] = {}
-        for feature_name, terms in self.IMPORTANT_FEATURE_TERMS.items():
-            normalized_terms = TextNormalizer.normalize_terms(tuple(terms))
-            snippets = [
-                sentence[:280]
-                for sentence, normalized_sentence in zip(sentences, normalized_sentences)
-                if any(term and term in normalized_sentence for term in normalized_terms)
-            ][:3]
+        for feature_name, normalized_terms in self._feature_terms.items():
+            snippets = []
+            for sentence, norm_sentence in valid_sentence_pairs:
+                if any(term and term in norm_sentence for term in normalized_terms):
+                    snippets.append(sentence[:280])
+                    if len(snippets) >= 3:
+                        break
             if snippets:
                 evidence[feature_name] = snippets
 

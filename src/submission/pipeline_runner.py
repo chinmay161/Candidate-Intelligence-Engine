@@ -52,14 +52,9 @@ class PipelineRunner:
             logger.info("Streaming candidates from %s", self.config.candidates_path)
             candidate_stream = self.candidate_parser.stream(self.config.candidates_path)
 
-            # Cache feature records for reasoning later, caching all is ~100MB for 100k
-            feature_records_cache = {}
-
             def streaming_features():
                 for candidate in candidate_stream:
-                    record = self.feature_extractor.extract(candidate)
-                    feature_records_cache[record.candidate_id] = record
-                    yield record
+                    yield self.feature_extractor.extract(candidate)
 
             # 3. Ranking
             logger.info("Ranking candidates...")
@@ -73,8 +68,19 @@ class PipelineRunner:
             # 4. Reasoning
             logger.info("Generating reasoning for top candidates...")
             reasoning_by_candidate = {}
+            
+            # Re-parse only the top candidates to save memory
+            top_ids = {match.candidate_id for match in ranking_result.matches}
+            top_records = {}
+            # Stream the file one more time
+            for candidate in self.candidate_parser.stream(self.config.candidates_path):
+                if candidate.candidate_id in top_ids:
+                    top_records[candidate.candidate_id] = self.feature_extractor.extract(candidate)
+                    if len(top_records) == len(top_ids):
+                        break
+
             for match in ranking_result.matches:
-                record = feature_records_cache[match.candidate_id]
+                record = top_records[match.candidate_id]
                 reasoning = self.reasoning_generator.generate(jd_analysis, match, record)
                 reasoning_by_candidate[match.candidate_id] = reasoning
 

@@ -1,13 +1,14 @@
 # Optimization Recommendations
 
-**Largest Bottleneck**: ranking_time consumes 95.54% of total runtime.
+**Largest Bottleneck**: feature_extraction_time consumes 83.26% of total runtime.
 
 ## Targeted Recommendations
 
 Consider:
-- Minimizing unnecessary sorting
-- Avoiding repeated score calculations
-- Utilizing min/max heaps for Top-K extraction
+- Caching (e.g., standardizing text once and reusing)
+- Vectorization of operations across candidates
+- Compiled regex (using `re.compile` at module level)
+- Lazy evaluation of expensive features
 
 ## General Recommendations
 - Memory: If peak memory is high, consider generator expressions instead of list comprehensions.

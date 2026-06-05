@@ -1,18 +1,18 @@
 {
   "candidate_score_distribution": {
-    "min": 0.0,
+    "min": 38.333914,
     "max": 100.0,
-    "mean": 28.5712227,
-    "median": 26.4107645,
-    "variance": 526.2563257410492
+    "mean": 53.72346022,
+    "median": 48.682304,
+    "variance": 201.5957369649634
   },
-  "score_variance": 526.2563257410492,
-  "duplicate_score_rate": 0.010000000000000009,
-  "penalty_rate": 1.0,
+  "score_variance": 201.5957369649634,
+  "duplicate_score_rate": 0.0,
+  "penalty_rate": 0.89,
   "confidence_distribution": {
-    "mean": 0.80709119,
-    "median": 0.8276465,
-    "min": 0.675608,
-    "max": 0.895664
+    "mean": 0.72957018,
+    "median": 0.7313795000000001,
+    "min": 0.607099,
+    "max": 0.857874
   }
 }

@@ -14,9 +14,9 @@ class StrengthDetector:
     """Identify evidence-backed strengths without inventing unsupported claims."""
 
     RULES: tuple[tuple[str, str, str, float], ...] = (
-        ("production", "production retrieval and ranking systems", "production_ir_evidence_score", 0.60),
-        ("evaluation", "ranking and retrieval evaluation frameworks", "ranking_eval_phrase_score", 0.55),
-        ("retrieval", "retrieval, embedding, and vector-search depth", "retrieval_skill_depth", 0.60),
+        ("production", "production retrieval and ranking systems", "production_ir_evidence_score", 0.45),
+        ("evaluation", "ranking and retrieval evaluation frameworks", "ranking_eval_phrase_score", 0.45),
+        ("retrieval", "retrieval, embedding, and vector-search depth", "retrieval_skill_depth", 0.45),
         ("role_fit", "strong target role-family alignment", "role_family_fit_score", 0.60),
         ("availability", "strong recruiter engagement and recent activity", "availability_multiplier", 1.05),
         ("product", "product-company background", "product_company_exposure_months", 24.0),
