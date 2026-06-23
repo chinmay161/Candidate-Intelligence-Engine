@@ -4,9 +4,9 @@
     "top_k_selected": 100
   },
   "reasoning_metrics": {
-    "reasoning_uniqueness_score": 0.73,
+    "reasoning_uniqueness_score": 0.98,
     "evidence_utilization_rate": 5.0,
-    "average_reasoning_length": 50.61
+    "average_reasoning_length": 58.88
   },
   "quality_metrics": {
     "average_score": 53.72346022,
@@ -19,7 +19,7 @@
     "penalty_frequency": 3.94
   },
   "system_metrics": {
-    "pipeline_runtime": 333.2099970999998,
+    "pipeline_runtime": 89.37200239999947,
     "memory_usage_estimate": null
   }
 }

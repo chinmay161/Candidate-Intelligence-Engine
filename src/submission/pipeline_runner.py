@@ -53,8 +53,7 @@ class PipelineRunner:
             candidate_stream = self.candidate_parser.stream(self.config.candidates_path)
 
             def streaming_features():
-                for candidate in candidate_stream:
-                    yield self.feature_extractor.extract(candidate)
+                yield from self.feature_extractor.extract_stream_multiprocess(candidate_stream, chunk_size=1000)
 
             # 3. Ranking
             logger.info("Ranking candidates...")
@@ -79,9 +78,9 @@ class PipelineRunner:
                     if len(top_records) == len(top_ids):
                         break
 
-            for match in ranking_result.matches:
+            for i, match in enumerate(ranking_result.matches):
                 record = top_records[match.candidate_id]
-                reasoning = self.reasoning_generator.generate(jd_analysis, match, record)
+                reasoning = self.reasoning_generator.generate(jd_analysis, match, record, rank=i + 1)
                 reasoning_by_candidate[match.candidate_id] = reasoning
 
             # 5. Build Recommendations

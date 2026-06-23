@@ -1,0 +1,22 @@
+team_name: "Candidate Intelligence Team"
+primary_contact:
+  name: "Contact Name"
+  email: "contact@example.com"
+  phone: "+1234567890"
+github_repository_url: "https://github.com/Chinmay/Candidate-Intelligence-Engine"
+sandbox_link: "https://huggingface.co/spaces/Chinmay/Candidate-Intelligence-Engine"
+ai_tools_declared:
+  - Cursor
+  - Gemini
+compute_environment: "Windows PC, 16GB RAM, Python 3.12"
+team_members:
+  - name: "Chinmay"
+    email: "contact@example.com"
+methodology_summary: >
+  A deterministic, high-throughput pipeline designed to rank 100k candidates against
+  a specific Job Description under CPU-only and offline constraints. The system extracts
+  highly structured semantic, experience, skill, behavioral, career, education, and logistics
+  feature groups from streamed JSONL profiles. Multi-pass matching combines BM25 lexical relevance
+  with semantic keyphrase matching and a penalty engine for anomaly and honeypot detection.
+  Finally, a deterministic reasoning layer generates explainable, evidence-backed explanations
+  to satisfy requirements for manual review stages.

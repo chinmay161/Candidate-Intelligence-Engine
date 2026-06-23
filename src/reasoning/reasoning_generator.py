@@ -36,11 +36,12 @@ class ReasoningGenerator:
         analysis: JDAnalysis,
         match: CandidateMatch,
         candidate: CandidateFeatureRecord,
+        rank: int | None = None,
     ) -> ReasoningResult:
         evidence = self.evidence_selector.select(match, candidate)
         strengths = self.strength_detector.detect(analysis, match, candidate, evidence)
         concerns = self.concern_detector.detect(analysis, match, candidate)
-        reasoning = self.templates.render(match, strengths, concerns)
+        reasoning = self.templates.render(match, strengths, concerns, candidate=candidate, rank=rank)
         confidence = self.confidence_estimator.estimate(match, candidate, evidence, strengths, concerns)
 
         return ReasoningResult(

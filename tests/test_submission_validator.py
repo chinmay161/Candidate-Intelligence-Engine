@@ -11,7 +11,7 @@ def valid_rows():
             candidate_id=f"C{i}",
             rank=i,
             score=1.0 - (i * 0.001),
-            reasoning="This is a valid length reasoning string that has more than ten words easily and explains things."
+            reasoning=f"This is a valid length reasoning string that has more than ten words easily and explains things {i}."
         )
         for i in range(1, 101)
     )

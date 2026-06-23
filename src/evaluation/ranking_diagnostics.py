@@ -24,7 +24,20 @@ class RankingDiagnostics:
         penalties = []
         for c in ranked_candidates:
             c_penalties = c.get("penalties") or []
-            if any(getattr(p, "severity", "low") != "low" for p in c_penalties):
+            has_penalty = False
+            for p in c_penalties:
+                severity = "low"
+                if isinstance(p, str):
+                    if p != "low":
+                        severity = "high"
+                elif isinstance(p, dict):
+                    severity = p.get("severity", "low")
+                else:
+                    severity = getattr(p, "severity", "low")
+                if severity != "low":
+                    has_penalty = True
+                    break
+            if has_penalty:
                 penalties.append(1)
                 
         confidences = [c.get("confidence", 0.0) for c in ranked_candidates if "confidence" in c]

@@ -50,11 +50,13 @@ def instrumented_run(config: PipelineConfig, profiler: RuntimeProfiler, mem_prof
 
         def streaming_features():
             nonlocal feature_extraction_time
-            for candidate in runner.candidate_parser.stream(runner.config.candidates_path):
-                t0 = time.perf_counter()
-                record = runner.feature_extractor.extract(candidate)
-                feature_extraction_time += (time.perf_counter() - t0)
+            candidate_stream = runner.candidate_parser.stream(runner.config.candidates_path)
+            t0 = time.perf_counter()
+            for record in runner.feature_extractor.extract_stream_multiprocess(candidate_stream, chunk_size=1000):
+                t1 = time.perf_counter()
+                feature_extraction_time += (t1 - t0)
                 yield record
+                t0 = time.perf_counter()
 
         # 3. Ranking
         start_rank = time.perf_counter()
@@ -85,9 +87,9 @@ def instrumented_run(config: PipelineConfig, profiler: RuntimeProfiler, mem_prof
                 if len(top_records) == len(top_ids):
                     break
 
-        for match in ranking_result.matches:
+        for i, match in enumerate(ranking_result.matches):
             record = top_records[match.candidate_id]
-            reasoning = runner.reasoning_generator.generate(jd_analysis, match, record)
+            reasoning = runner.reasoning_generator.generate(jd_analysis, match, record, rank=i + 1)
             reasoning_by_candidate[match.candidate_id] = reasoning
             
         profiler.stop("reasoning_time")
@@ -157,7 +159,7 @@ def ablation_pipeline(ablation_config: AblationConfig, jd_path: str, candidates_
     if not ablation_config.reasoning_layer_enabled:
         from reasoning.reasoning_models import ReasoningResult
         class DummyReasoningGenerator:
-            def generate(self, analysis, match, record): 
+            def generate(self, analysis, match, record, rank=None): 
                 return ReasoningResult(
                     candidate_id=match.candidate_id,
                     reasoning=f"Reasoning disabled for ablation test on candidate {match.candidate_id}. Padding with extra words to bypass the ten word minimum validation requirement.",

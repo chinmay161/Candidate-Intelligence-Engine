@@ -118,7 +118,88 @@ class EvidenceExtractor:
             f"recruiter_response_rate={signals.recruiter_response_rate:.2f}",
             f"notice_period_days={signals.notice_period_days}",
         ]
+
+        # Extract specific candidate facts for reasoning template personalization
+        import json
+        facts = {
+            "yoe": candidate.profile.years_of_experience,
+            "current_title": candidate.profile.current_title,
+            "current_company": candidate.profile.current_company,
+            "location": candidate.profile.location,
+            "country": candidate.profile.country,
+            "current_industry": candidate.profile.current_industry,
+            "notice_period_days": signals.notice_period_days,
+            "open_to_work": signals.open_to_work_flag,
+            "recruiter_response_rate": signals.recruiter_response_rate,
+            "last_active_days": max(0, (AS_OF_DATE - signals.last_active_date).days),
+            "github_activity_score": signals.github_activity_score,
+        }
+
+        # Product vs consulting background
+        product_months = sum(
+            role.duration_months
+            for role in candidate.career_history
+            if TextNormalizer.has_any(f"{role.company} {role.industry}", PRODUCT_INDUSTRIES)
+        )
+        services_only = (
+            all(
+                TextNormalizer.has_any(f"{role.company} {role.industry}", CONSULTING_COMPANIES + ("consulting", "it services"))
+                for role in candidate.career_history
+            )
+            and product_months == 0
+            and len(candidate.career_history) > 0
+        )
+        facts["product_months"] = product_months
+        facts["services_only"] = services_only
+
+        # Core search/retrieval technologies
+        techs = []
+        norm_full_text = TextNormalizer.normalize(candidate.full_text)
+        for tech in ["faiss", "elasticsearch", "opensearch", "solr", "lucene", "pinecone", "milvus", "weaviate", "qdrant", "chroma", "vald", "vespa", "hybrid search", "bm25", "learning to rank", "ndcg", "map", "mrr"]:
+            if tech in norm_full_text:
+                cased = {
+                    "faiss": "FAISS",
+                    "elasticsearch": "Elasticsearch",
+                    "opensearch": "OpenSearch",
+                    "solr": "Solr",
+                    "lucene": "Lucene",
+                    "pinecone": "Pinecone",
+                    "milvus": "Milvus",
+                    "weaviate": "Weaviate",
+                    "qdrant": "Qdrant",
+                    "chroma": "Chroma",
+                    "vald": "Vald",
+                    "vespa": "Vespa",
+                    "hybrid search": "hybrid search",
+                    "bm25": "BM25",
+                    "learning to rank": "Learning to Rank",
+                    "ndcg": "NDCG",
+                    "map": "MAP",
+                    "mrr": "MRR"
+                }[tech]
+                techs.append(cased)
+        facts["technologies"] = techs
+
+        # Evaluation experience
+        eval_terms = ["ndcg", "map", "mrr", "precision@k", "recall@k", "evaluation framework", "search quality"]
+        facts["has_eval"] = any(term in norm_full_text for term in eval_terms)
+
+        evidence["candidate_facts"] = [json.dumps(facts)]
+
         return CandidateEvidence(candidate_id=candidate.candidate_id, by_feature=evidence)
+
+
+_local_extractor = None
+
+def _init_worker():
+    global _local_extractor
+    _local_extractor = CandidateFeatureExtractor()
+
+def _extract_single(candidate: Candidate) -> CandidateFeatureRecord:
+    global _local_extractor
+    if _local_extractor is None:
+        _local_extractor = CandidateFeatureExtractor()
+    return _local_extractor.extract(candidate)
 
 
 class CandidateFeatureExtractor:
@@ -174,6 +255,13 @@ class CandidateFeatureExtractor:
 
     def extract_many(self, candidates: list[Candidate] | tuple[Candidate, ...]) -> list[CandidateFeatureRecord]:
         return [self.extract(candidate) for candidate in candidates]
+
+    def extract_stream_multiprocess(self, candidate_stream, chunk_size: int = 1000):
+        import multiprocessing
+        # We leave at least 1 core free if possible
+        pool_size = max(1, multiprocessing.cpu_count() - 1)
+        with multiprocessing.Pool(processes=pool_size, initializer=_init_worker) as pool:
+            yield from pool.imap(_extract_single, candidate_stream, chunksize=chunk_size)
 
     def _semantic_features(self, context: "_CandidateContext") -> dict[str, float | int]:
         text = context.full_text

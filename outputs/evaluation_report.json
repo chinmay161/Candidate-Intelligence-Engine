@@ -1,0 +1,25 @@
+{
+  "ranking_metrics": {
+    "total_candidates_ranked": 1000,
+    "top_k_selected": 100
+  },
+  "reasoning_metrics": {
+    "reasoning_uniqueness_score": 0.89,
+    "evidence_utilization_rate": 4.89,
+    "average_reasoning_length": 38.09
+  },
+  "quality_metrics": {
+    "average_score": 15.23354502,
+    "score_distribution": {
+      "min": 0.0,
+      "max": 100.0,
+      "median": 8.568758
+    },
+    "average_confidence": 0.7208072099999999,
+    "penalty_frequency": 3.09
+  },
+  "system_metrics": {
+    "pipeline_runtime": 4.225569486618042,
+    "memory_usage_estimate": null
+  }
+}

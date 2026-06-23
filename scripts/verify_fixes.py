@@ -38,7 +38,7 @@ def main():
     
     for match in result.matches:
         # Dummy candidate just for reasoning generation
-        cand = next(c for c in extractor.extract_batch([next((cx for cx in parser.stream("data/candidates.jsonl") if cx.candidate_id == match.candidate_id), None)]) if c is not None)
+        cand = next(c for c in extractor.extract_many([next((cx for cx in parser.stream("data/candidates.jsonl") if cx.candidate_id == match.candidate_id), None)]) if c is not None)
         reasoning = generator.generate(jd_analysis, match, cand)
         
         scores.add(match.score)
