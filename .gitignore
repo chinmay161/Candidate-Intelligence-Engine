@@ -7,3 +7,9 @@ __pycache__/
 venv/
 candidate_features.csv
 candidate_features.parquet
+
+# Large dataset files
+data/candidates.jsonl
+data/candidates_50000.jsonl
+samples/benchmark_candidates.jsonl
+
