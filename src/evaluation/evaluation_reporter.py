@@ -54,7 +54,7 @@ class EvaluationReporter:
         report.append(f"- **Score Range**: {score_dist.get('min', 0):.2f} - {score_dist.get('max', 0):.2f}")
         report.append(f"- **Score Variance**: {diagnostics.get('score_variance', 0.0):.4f}")
         report.append(f"- **Duplicate Score Rate**: {diagnostics.get('duplicate_score_rate', 0.0)*100:.2f}%")
-        report.append(f"- **Penalty Rate (Honeypot/Anomalies)**: {diagnostics.get('penalty_rate', 0.0)*100:.2f}%")
+        report.append(f"- **Candidate Warning Rate**: {diagnostics.get('penalty_rate', 0.0)*100:.2f}%")
         report.append("")
         
         # Ablations

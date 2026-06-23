@@ -1,10 +1,10 @@
 {
-  "jd_parsing_time": 0.014564600000085193,
+  "jd_parsing_time": 0.016641299999719195,
   "candidate_parsing_time": 0.0,
-  "feature_extraction_time": 38.43195429998923,
+  "feature_extraction_time": 39.40349759981473,
   "matching_time": 0.0,
-  "ranking_time": 43.29348990001017,
-  "reasoning_time": 7.631693399999676,
-  "submission_time": 0.00025040000036824495,
-  "total_runtime": 89.37210989999949
+  "ranking_time": 44.43806640018556,
+  "reasoning_time": 7.716468199999326,
+  "submission_time": 0.0002547000003687572,
+  "total_runtime": 91.57510100000036
 }

@@ -96,3 +96,39 @@ src/
 ## 📋 Portal Metadata
 
 All submission metadata is structured inside [submission_metadata.yaml](file:///c:/Users/Chinmay/Desktop/Vs%20Code/Candidate%20Intelligence%20Engine/submission_metadata.yaml) at the repository root. Ensure you mirror this information on the upload portal during final submission.
+
+---
+
+## 📊 Evaluation & Diagnostic Metrics Explained
+
+The diagnostic report in `reports/final_evaluation_report.md` evaluates the performance, throughput, and robustness of the ranking system using the following metrics:
+
+### ⏱️ Runtime Profile Metrics
+*   **`jd_parsing_time`**: The wall-clock time required to load and parse the target Job Description (JD) to extract roles, skills, and compute keyword importance weights.
+*   **`candidate_parsing_time`**: The initialization overhead of opening the candidate dataset streams.
+*   **`feature_extraction_time`**: The CPU time consumed while processing candidate records through multi-process tokenizers and extracting structured features (semantics, skills, experience, anomalies, etc.).
+*   **`matching_time`**: The time spent matching parsed JD attributes against structured candidate features.
+*   **`ranking_time`**: The time spent scoring the shortlisted candidates, normalizing the scores, resolving score ties deterministically, and selecting the top $K$ matches.
+*   **`reasoning_time`**: The time taken to analyze matching details for top-selected candidates and deterministically assemble explanation summaries.
+*   **`submission_time`**: The time required to serialize and write the output data rows to the final CSV file.
+*   **`Total Runtime`**: The total elapsed execution time from pipeline startup to final output generation.
+
+### 💾 Memory Profile Metrics
+*   **`Peak Memory`**: The highest resident memory footprint recorded during pipeline execution (crucial for verifying compliance with the $\le 16$ GB sandbox limit).
+*   **`Average Memory`**: The mean memory footprint tracked across snapshots during pipeline processing.
+*   **`Memory per Candidate`**: The average memory overhead allocated per candidate record processed (indicates scaling efficiency).
+
+### 📈 Scalability Metrics
+*   **`Scale`**: The dataset size (number of candidates) evaluated during scaling trials (ranges from 1,000 to 100,000).
+*   **`Throughput (cands/s)`**: The number of candidate profiles parsed, scored, and processed per second.
+
+### 🔍 Explainability & Robustness Metrics
+*   **`Score Range`**: The minimum and maximum final scores assigned to candidates within the top 100 list (quantifies the score span).
+*   **`Score Variance`**: The statistical variance of the scores assigned in the top 100 list. Higher variance indicates greater score separation between candidates, suggesting the ranker is making stronger distinctions among candidate profiles.
+*   **`Duplicate Score Rate`**: The percentage of identical scores in the top 100 list. A rate of `0.0%` is expected as the ranker deterministically resolves score ties to assign unique ranks.
+*   **`Candidate Warning Rate`**: Percentage of Top-100 candidates that received at least one medium/high ranking penalty such as notice period, consulting-heavy history, salary inconsistency, or profile-quality warnings. This metric is not the competition honeypot rate and does not indicate synthetic trap candidates.
+
+### 🔬 Ablation Studies Metrics
+*   **`Diversity Metric`**: The candidate diversity score across different pipeline configurations (measures the range of unique candidate attributes).
+*   **`Reasoning Quality`**: An evaluation rating indicating whether explainable justification was successfully generated for matches.
+
