@@ -1,17 +1,19 @@
-team_name: "Candidate Intelligence Team"
+team_name: "CodeByte"
 primary_contact:
-  name: "Contact Name"
-  email: "contact@example.com"
-  phone: "+1234567890"
+  name: "Chinmay Wankhede"
+  email: "chinmaywank12@gmail.com"
+  phone: "+91 9152792707"
 github_repository_url: "https://github.com/Chinmay/Candidate-Intelligence-Engine"
 sandbox_link: "https://huggingface.co/spaces/Chinmay/Candidate-Intelligence-Engine"
 ai_tools_declared:
-  - Cursor
-  - Gemini
+  - Codex
+  - Antigravity
 compute_environment: "Windows PC, 16GB RAM, Python 3.12"
 team_members:
-  - name: "Chinmay"
-    email: "contact@example.com"
+  - name: "Chinmay Wankhede"
+    email: "chinmaywank12@gmail.com"
+  - name: "Soumya Vinod"
+    email: "soumyav0212@gmail.com"
 methodology_summary: >
   A deterministic, high-throughput pipeline designed to rank 100k candidates against
   a specific Job Description under CPU-only and offline constraints. The system extracts

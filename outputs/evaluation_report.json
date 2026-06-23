@@ -1,25 +1,25 @@
 {
   "ranking_metrics": {
-    "total_candidates_ranked": 1000,
+    "total_candidates_ranked": 100000,
     "top_k_selected": 100
   },
   "reasoning_metrics": {
-    "reasoning_uniqueness_score": 0.89,
-    "evidence_utilization_rate": 4.89,
-    "average_reasoning_length": 38.09
+    "reasoning_uniqueness_score": 0.98,
+    "evidence_utilization_rate": 5.0,
+    "average_reasoning_length": 58.88
   },
   "quality_metrics": {
-    "average_score": 15.23354502,
+    "average_score": 53.72346022,
     "score_distribution": {
-      "min": 0.0,
+      "min": 38.333914,
       "max": 100.0,
-      "median": 8.568758
+      "median": 49.087609
     },
-    "average_confidence": 0.7208072099999999,
-    "penalty_frequency": 3.09
+    "average_confidence": 0.77907072,
+    "penalty_frequency": 3.94
   },
   "system_metrics": {
-    "pipeline_runtime": 4.225569486618042,
+    "pipeline_runtime": 93.87679171562195,
     "memory_usage_estimate": null
   }
 }

@@ -1,134 +1,394 @@
 # Candidate Intelligence Engine
 
-Intelligent Candidate Discovery & Ranking Engine designed for the Redrob Hackathon v4. 
-It streams, parses, processes, ranks, and generates explainable reasoning for candidates against a job description under offline CPU-only constraints.
+Intelligent Candidate Discovery & Ranking Engine built for the Redrob Hackathon v4.
+
+The system streams, parses, ranks, and explains candidate-job matches under strict production-style constraints:
+
+* CPU only
+* Offline execution
+* No external APIs
+* Deterministic output
+* Scalable to 100,000 candidate profiles
 
 ---
 
-## 🚀 Single-Command Reproduction
+# Overview
 
-To generate the submission CSV from the candidate pool, run the following command from the root of the repository:
+The Candidate Intelligence Engine is an explainable ranking system that identifies the Top-100 candidates for a target Job Description (JD).
 
-```bash
-python rank.py --candidates ./data/candidates.jsonl --out ./submission.csv
+The pipeline combines:
+
+* Structured feature extraction
+* Retrieval and ranking signals
+* Candidate anomaly detection
+* Deterministic scoring
+* Evidence-backed reasoning generation
+
+The output is a submission-ready CSV containing:
+
+* candidate_id
+* rank
+* score
+* reasoning
+
+---
+
+# Dataset
+
+The official Redrob candidate dataset is intentionally excluded from this repository due to its size.
+
+Place the provided competition dataset at:
+
+```text
+data/candidates.jsonl
 ```
 
-### Options:
-*   `--candidates`: Path to the candidate JSONL database (e.g., `data/candidates.jsonl`).
-*   `--out`: Target path where the output ranking CSV will be saved (e.g., `./submission.csv`).
-*   `--jd`: (Optional) Path to the job description text file. Defaults to `data/job_description.txt`.
+before running the ranking pipeline.
 
 ---
 
-## 📦 Sandbox & Docker Reproduction
+# Compute Compliance
 
-If you wish to test or reproduce the results in an isolated sandbox matching the hackathon CPU and memory limits:
+The ranking stage is designed to satisfy the Redrob evaluation constraints.
 
-### 1. Build the Docker image:
+| Constraint     | Status            |
+| -------------- | ----------------- |
+| CPU Only       | ✅                 |
+| Network Access | ❌ Not Required    |
+| External APIs  | ❌ None            |
+| Runtime Limit  | ✅ Under 5 Minutes |
+| Memory Limit   | ✅ Under 16 GB     |
+
+Measured on the full 100,000-candidate dataset:
+
+| Metric         | Value       |
+| -------------- | ----------- |
+| Runtime        | ~91.58 seconds |
+| Peak Memory    | ~302.96 MB     |
+| Average Memory | ~191.22 MB     |
+
+---
+
+# Single-Command Reproduction
+
+Generate the submission CSV using:
+
 ```bash
-docker build -t candidate-ranker .
+python rank.py \
+  --candidates data/candidates.jsonl \
+  --out submission.csv
 ```
 
-### 2. Run the ranker container:
-Mount your local data directory and produce the submission:
+Optional parameters:
+
 ```bash
-docker run --rm \
-  -v "$(pwd)/data:/app/data" \
-  -v "$(pwd)/outputs:/app/outputs" \
-  candidate-ranker --candidates data/candidates.jsonl --out outputs/submission.csv
+--jd data/job_description.txt
+```
+
+Output:
+
+```text
+submission.csv
 ```
 
 ---
 
-## 🛠️ Setup & Installation
+# Reproducibility
 
-### Local Virtual Environment:
-Ensure you have Python 3.12+ installed.
+The ranking pipeline is fully deterministic.
 
-1. Create a virtual environment:
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # On Windows: .\venv\Scripts\activate
-   ```
+Running the same command with:
 
-2. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
+* the same candidate dataset
+* the same job description
+* the same code revision
 
-3. (Optional) Run the complete performance & diagnostics suite:
-   ```bash
-   python run_evaluations.py
-   ```
+will always produce identical:
+
+* rankings
+* scores
+* reasoning strings
+* submission CSV output
+
+Determinism is verified using:
+
+```bash
+python scripts/verify_determinism.py
+```
 
 ---
 
-## 🧪 Running Tests
+# Architecture
 
-The test suite validates features, scorers, validators, retrievers, and anomaly detection. Run the suite using `pytest`:
+```text
+Job Description
+      │
+      ▼
+JD Parser
+      │
+      ▼
+Candidate Stream
+      │
+      ▼
+Feature Extraction
+      │
+      ▼
+Anomaly Detection
+      │
+      ▼
+Scoring Engine
+      │
+      ▼
+Top-100 Selection
+      │
+      ▼
+Reasoning Generator
+      │
+      ▼
+Submission CSV
+```
+
+---
+
+# Repository Structure
+
+```text
+Candidate-Intelligence-Engine/
+│
+├── src/
+│   ├── candidate_processor/
+│   ├── jd_parser/
+│   ├── ranking/
+│   ├── reasoning/
+│   └── submission/
+│
+├── tests/
+├── scripts/
+├── reports/
+├── sample_data/
+│
+├── requirements.txt
+├── submission_metadata.yaml
+├── rank.py
+└── README.md
+```
+
+---
+
+# Design Highlights
+
+## Offline Ranking
+
+The entire ranking pipeline executes locally without external services.
+
+No hosted LLM APIs, cloud inference, or network requests are required during ranking.
+
+---
+
+## Candidate Anomaly Detection
+
+The anomaly detection layer identifies inconsistent or suspicious profile signals, including:
+
+* Impossible employment timelines
+* Multi-current-role conflicts
+* Skill-experience mismatches
+* Excessive keyword stuffing
+* Contradictory profile information
+
+Detected issues are incorporated into candidate scoring through deterministic penalties.
+
+---
+
+## Explainable Reasoning Layer
+
+The reasoning engine generates evidence-backed candidate justifications using:
+
+* Candidate experience
+* Current role
+* Technical skills
+* Behavioral signals
+* Availability indicators
+* Ranking concerns
+
+Characteristics:
+
+* Deterministic output
+* Approximately 98% reasoning uniqueness
+* Rank-aware tone
+* Candidate-specific evidence
+* No external language models
+
+Designed specifically for Stage 4 manual review requirements.
+
+---
+
+# Setup & Installation
+
+## Create Virtual Environment
 
 ```bash
-$env:PYTHONPATH="." # On Windows PowerShell
-# OR export PYTHONPATH="." (On Linux/macOS)
+python -m venv venv
+```
+
+Activate:
+
+### Windows
+
+```bash
+.\venv\Scripts\activate
+```
+
+### Linux / macOS
+
+```bash
+source venv/bin/activate
+```
+
+---
+
+## Install Dependencies
+
+```bash
+pip install -r requirements.txt
+```
+
+---
+
+# Running Tests
+
+Run the complete test suite:
+
+```bash
+pytest
+```
+
+Windows PowerShell:
+
+```bash
+$env:PYTHONPATH="."
+pytest
+```
+
+Linux/macOS:
+
+```bash
+export PYTHONPATH="."
 pytest
 ```
 
 ---
 
-## 🏗️ Architecture
+# Sandbox & Docker Reproduction
 
-```text
-src/
-├── candidate_processor/   # Streams JSONL candidates & extracts structured features (semantics, skills, career, logistics, anomalies)
-├── jd_parser/             # Parses the target Job Description to extract roles, skills, and generate feature weights
-├── ranking/               # Pre-filters candidates, normalizes signals, scores candidates, and handles honeypot/trap penalization
-├── reasoning/             # Explains candidates' strengths/concerns and outputs structured human-readable justification
-└── submission/            # Enforces integrity checks (duplicate detection, score ordering, word limit validation) and exports CSV
+Build:
+
+```bash
+docker build -t candidate-ranker .
 ```
 
-### Design Highlights:
-*   **Zero-Dependency Offline Ranking**: Fully offline, CPU-bound ranking that scales efficiently to 100K candidate pools (completing in ~97 seconds, using <320 MB peak memory).
-*   **Trap & Honeypot Protection**: The `AnomalyDetector` identifies impossible profile signals (such as negative durations, multi-current roles, or mismatched skill experience) and penalizes them deterministically, achieving a **0% honeypot leak rate** in the top 100 picks.
-*   **Explainable Reasoning Layer**: Emits deterministic, evidence-backed justifications (10-1000 words, >10 unique reasonings across candidate lists) for Stage 4 manual reviews.
+Run:
+
+```bash
+docker run --rm \
+  -v "$(pwd)/data:/app/data" \
+  -v "$(pwd)/outputs:/app/outputs" \
+  candidate-ranker \
+  --candidates data/candidates.jsonl \
+  --out outputs/submission.csv
+```
 
 ---
 
-## 📋 Portal Metadata
+# Evaluation & Diagnostic Metrics
 
-All submission metadata is structured inside [submission_metadata.yaml](file:///c:/Users/Chinmay/Desktop/Vs%20Code/Candidate%20Intelligence%20Engine/submission_metadata.yaml) at the repository root. Ensure you mirror this information on the upload portal during final submission.
+The repository includes diagnostic reports used to evaluate performance, scalability, explainability, and reproducibility.
+
+## Runtime Metrics
+
+* `jd_parsing_time`
+* `candidate_parsing_time`
+* `feature_extraction_time`
+* `matching_time`
+* `ranking_time`
+* `reasoning_time`
+* `submission_time`
+* `total_runtime`
+
+These metrics quantify end-to-end execution cost.
 
 ---
 
-## 📊 Evaluation & Diagnostic Metrics Explained
+## Memory Metrics
 
-The diagnostic report in `reports/final_evaluation_report.md` evaluates the performance, throughput, and robustness of the ranking system using the following metrics:
+* `peak_memory`
+* `average_memory`
+* `memory_per_candidate`
 
-### ⏱️ Runtime Profile Metrics
-*   **`jd_parsing_time`**: The wall-clock time required to load and parse the target Job Description (JD) to extract roles, skills, and compute keyword importance weights.
-*   **`candidate_parsing_time`**: The initialization overhead of opening the candidate dataset streams.
-*   **`feature_extraction_time`**: The CPU time consumed while processing candidate records through multi-process tokenizers and extracting structured features (semantics, skills, experience, anomalies, etc.).
-*   **`matching_time`**: The time spent matching parsed JD attributes against structured candidate features.
-*   **`ranking_time`**: The time spent scoring the shortlisted candidates, normalizing the scores, resolving score ties deterministically, and selecting the top $K$ matches.
-*   **`reasoning_time`**: The time taken to analyze matching details for top-selected candidates and deterministically assemble explanation summaries.
-*   **`submission_time`**: The time required to serialize and write the output data rows to the final CSV file.
-*   **`Total Runtime`**: The total elapsed execution time from pipeline startup to final output generation.
+Used to validate memory efficiency and sandbox compliance.
 
-### 💾 Memory Profile Metrics
-*   **`Peak Memory`**: The highest resident memory footprint recorded during pipeline execution (crucial for verifying compliance with the $\le 16$ GB sandbox limit).
-*   **`Average Memory`**: The mean memory footprint tracked across snapshots during pipeline processing.
-*   **`Memory per Candidate`**: The average memory overhead allocated per candidate record processed (indicates scaling efficiency).
+---
 
-### 📈 Scalability Metrics
-*   **`Scale`**: The dataset size (number of candidates) evaluated during scaling trials (ranges from 1,000 to 100,000).
-*   **`Throughput (cands/s)`**: The number of candidate profiles parsed, scored, and processed per second.
+## Scalability Metrics
 
-### 🔍 Explainability & Robustness Metrics
-*   **`Score Range`**: The minimum and maximum final scores assigned to candidates within the top 100 list (quantifies the score span).
-*   **`Score Variance`**: The statistical variance of the scores assigned in the top 100 list. Higher variance indicates greater score separation between candidates, suggesting the ranker is making stronger distinctions among candidate profiles.
-*   **`Duplicate Score Rate`**: The percentage of identical scores in the top 100 list. A rate of `0.0%` is expected as the ranker deterministically resolves score ties to assign unique ranks.
-*   **`Candidate Warning Rate`**: Percentage of Top-100 candidates that received at least one medium/high ranking penalty such as notice period, consulting-heavy history, salary inconsistency, or profile-quality warnings. This metric is not the competition honeypot rate and does not indicate synthetic trap candidates.
+* Dataset scale
+* Throughput (candidates/sec)
 
-### 🔬 Ablation Studies Metrics
-*   **`Diversity Metric`**: The candidate diversity score across different pipeline configurations (measures the range of unique candidate attributes).
-*   **`Reasoning Quality`**: An evaluation rating indicating whether explainable justification was successfully generated for matches.
+Measured across multiple dataset sizes up to 100,000 candidates.
 
+---
+
+## Explainability Metrics
+
+### Score Range
+
+Minimum and maximum scores assigned within the Top-100 ranking.
+
+### Score Variance
+
+Variance of ranking scores. Higher variance indicates greater separation between candidates and stronger ranking distinctions.
+
+### Duplicate Score Rate
+
+Percentage of identical scores among Top-100 candidates.
+
+The system resolves ties deterministically to ensure stable rankings.
+
+### Candidate Warning Rate
+
+Percentage of Top-100 candidates receiving at least one medium/high ranking penalty such as:
+
+* Long notice periods
+* Consulting-heavy career history
+* Salary inconsistencies
+* Profile quality warnings
+
+This metric is not the competition honeypot rate and does not indicate synthetic trap candidates.
+
+---
+
+## Ablation Metrics
+
+### Diversity Metric
+
+Measures candidate diversity across ranking configurations.
+
+### Reasoning Quality
+
+Measures whether evidence-backed candidate explanations are successfully generated.
+
+---
+
+# Submission Metadata
+
+All portal metadata is maintained in:
+
+```text
+submission_metadata.yaml
+```
+
+
+---
+
+# License
+
+This repository was developed for the Redrob Hackathon v4 candidate ranking challenge.
